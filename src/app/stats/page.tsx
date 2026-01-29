@@ -266,7 +266,7 @@ export default function StatsPage() {
               {week.map((day, dayIdx) => (
                 <div
                   key={dayIdx}
-                  className={`aspect-square rounded flex items-center justify-center text-sm ${
+                  className={`h-10 rounded flex items-center justify-center text-sm ${
                     !day
                       ? ""
                       : day.isToday

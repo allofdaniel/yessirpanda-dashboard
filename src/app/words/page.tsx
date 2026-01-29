@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState } from 'react';
 
@@ -17,6 +17,7 @@ export default function WordsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedWordIndex, setExpandedWordIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -27,14 +28,20 @@ export default function WordsPage() {
           fetch('/api/config'),
         ]);
 
+        if (!wordsRes.ok || !configRes.ok) {
+          throw new Error('Failed to fetch data');
+        }
+
         const wordsData = await wordsRes.json();
         const configData = await configRes.json();
 
         setAllWords(wordsData);
         setConfig(configData);
-        setSelectedDay(parseInt(configData.CurrentDay));
-      } catch (error) {
-        console.error('Failed to fetch data:', error);
+        const parsedDay = parseInt(configData.CurrentDay);
+        setSelectedDay(isNaN(parsedDay) ? null : parsedDay);
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load data');
       } finally {
         setLoading(false);
       }
@@ -102,6 +109,17 @@ export default function WordsPage() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-red-400">{error}</div>
+      </div>
+    );
+  }
+
+  const totalDays = config ? parseInt(config.TotalDays) : 0;
+  const safeTotalDays = isNaN(totalDays) || totalDays < 0 ? 0 : totalDays;
+
   return (
     <div className="space-y-6">
       <div className="space-y-2 animate-fade-in">
@@ -117,9 +135,9 @@ export default function WordsPage() {
         <button onClick={() => handleDayFilter(null)} className={`px-4 py-2 rounded-xl font-medium text-sm transition-all flex-shrink-0 ${selectedDay === null ? 'bg-violet-600 text-white' : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800'}`}>
           전체
         </button>
-        {config && [...Array(parseInt(config.TotalDays))].map((_, i) => {
+        {safeTotalDays > 0 && [...Array(safeTotalDays)].map((_, i) => {
           const day = i + 1;
-          const isCurrentDay = day === parseInt(config.CurrentDay);
+          const isCurrentDay = day === parseInt(config?.CurrentDay || '0');
           return (
             <button key={day} onClick={() => handleDayFilter(day)} className={`relative px-4 py-2 rounded-xl font-medium text-sm transition-all flex-shrink-0 ${selectedDay === day ? 'bg-violet-600 text-white' : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800'}`}>
               {isCurrentDay && <span className="absolute -top-1 -right-1 w-2 h-2 bg-emerald-500 rounded-full" />}

@@ -58,7 +58,7 @@ export default function Navigation() {
   return (
     <>
       {/* Desktop Sidebar */}
-      <nav className="hidden md:flex fixed left-0 top-0 bottom-0 w-60 flex-col bg-black/80 backdrop-blur-xl border-r border-white/[0.06]">
+      <nav className="hidden md:flex fixed left-0 top-0 bottom-0 w-60 flex-col bg-black border-r border-white/[0.06] z-40">
         {/* Header */}
         <div className="p-6 pb-8">
           <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-500 bg-clip-text text-transparent">
@@ -97,7 +97,7 @@ export default function Navigation() {
       </nav>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-black/90 backdrop-blur-xl border-t border-white/[0.06] pb-[env(safe-area-inset-bottom)]">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-black border-t border-white/[0.06] pb-[env(safe-area-inset-bottom)]">
         <div className="flex justify-around h-16">
           {navItems.map((item) => {
             const isActive = pathname === item.href
