@@ -194,7 +194,7 @@ export default function ControlPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center pb-24">
+      <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-gray-400">Loading...</div>
       </div>
     );
@@ -202,7 +202,7 @@ export default function ControlPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center pb-24">
+      <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-red-500">Error: {error}</div>
       </div>
     );
@@ -211,8 +211,7 @@ export default function ControlPage() {
   const totalDays = config ? parseInt(config.TotalDays) : 1;
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white pb-24 px-4 py-6">
-      <div className="max-w-4xl mx-auto space-y-6">
+    <div className="space-y-6">
         {/* Header */}
         <h1 className="text-3xl font-bold mb-6">⚙️ n8n 제어판</h1>
 
@@ -362,7 +361,6 @@ export default function ControlPage() {
             </div>
           </div>
         </div>
-      </div>
 
       {/* Toast Notification */}
       {toast && (

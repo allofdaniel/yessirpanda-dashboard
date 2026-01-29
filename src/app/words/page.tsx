@@ -87,8 +87,7 @@ export default function WordsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-900 pb-24 md:pl-64">
-        <div className="p-6 max-w-6xl mx-auto">
+      <div className="space-y-6">
           {/* Header Skeleton */}
           <div className="mb-8">
             <div className="h-10 w-48 bg-gray-800 rounded-lg animate-pulse mb-2"></div>
@@ -113,7 +112,7 @@ export default function WordsPage() {
           </div>
 
           {/* Words List Skeleton */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[...Array(6)].map((_, i) => (
               <div
                 key={i}
@@ -121,14 +120,12 @@ export default function WordsPage() {
               ></div>
             ))}
           </div>
-        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 pb-24 md:pl-64">
-      <div className="p-6 max-w-6xl mx-auto">
+    <div className="space-y-6">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-white mb-2 flex items-center gap-3">
@@ -239,7 +236,7 @@ export default function WordsPage() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredWords.map((word, index) => {
               const isExpanded = expandedWordIndex === index;
               const globalIndex =
@@ -316,7 +313,6 @@ export default function WordsPage() {
             })}
           </div>
         )}
-      </div>
     </div>
   );
 }

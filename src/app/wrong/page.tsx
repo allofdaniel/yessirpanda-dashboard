@@ -106,8 +106,7 @@ export default function WrongWordsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-900 p-6 pb-24">
-        <div className="max-w-4xl mx-auto">
+      <div className="space-y-6">
           {/* Header Skeleton */}
           <div className="mb-8">
             <div className="h-10 w-48 bg-gray-800 rounded animate-pulse mb-2"></div>
@@ -132,14 +131,12 @@ export default function WrongWordsPage() {
           {[1, 2, 3].map(i => (
             <div key={i} className="h-40 bg-gray-800 rounded-lg mb-4 animate-pulse"></div>
           ))}
-        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 p-6 pb-24">
-      <div className="max-w-4xl mx-auto">
+    <div className="space-y-6">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white mb-2">
@@ -280,7 +277,6 @@ export default function WrongWordsPage() {
             ))}
           </div>
         )}
-      </div>
     </div>
   );
 }
