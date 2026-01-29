@@ -1,41 +1,33 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
-import Navigation from "@/components/Navigation";
+import type { Metadata } from 'next'
+import { Space_Grotesk } from 'next/font/google'
+import './globals.css'
+import Navigation from '@/components/Navigation'
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const spaceGrotesk = Space_Grotesk({
+  subsets: ['latin'],
+  variable: '--font-space-grotesk',
+})
 
 export const metadata: Metadata = {
-  title: "옛설판다 대시보드",
-  description: "옛설판다 한국어 학습 대시보드 - 단어장, 오답, 통계 관리",
-  keywords: ["한국어", "학습", "대시보드", "단어장", "옛설판다"],
-};
+  title: '옛설판다 대시보드',
+  description: '옛설판다 - 한국어 영어 학습을 위한 스마트 대시보드. 단어장, 오답 노트, 학습 통계를 한눈에 관리하세요.',
+}
 
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode;
+  children: React.ReactNode
 }>) {
   return (
     <html lang="ko">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gradient-to-br from-gray-900 via-purple-900/20 to-gray-900 min-h-screen`}
-      >
+      <body className={`${spaceGrotesk.variable} bg-black text-zinc-100 grain`}>
         <Navigation />
-        <main className="pb-20 md:pb-0 md:pl-64">
-          <div className="container mx-auto px-4 py-8 max-w-7xl">
+        <main className="pb-20 md:pb-0 md:pl-60">
+          <div className="mx-auto max-w-6xl px-5 py-6 md:py-8">
             {children}
           </div>
         </main>
       </body>
     </html>
-  );
+  )
 }

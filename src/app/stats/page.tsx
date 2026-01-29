@@ -1,18 +1,18 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from "react";
 
 interface Attendance {
   Email: string;
   Date: string;
-  Type: 'morning' | 'lunch' | 'evening';
+  Type: string;
   Completed: boolean;
 }
 
 interface Result {
   Email: string;
   Day: number;
-  QuizType: 'morning' | 'lunch';
+  QuizType: string;
   Word: string;
   CorrectAnswer: string;
   UserAnswer: string;
@@ -21,9 +21,8 @@ interface Result {
 }
 
 interface Config {
-  CurrentDay: string;
-  TotalDays: string;
-  SpreadsheetId?: string;
+  CurrentDay: number;
+  TotalDays: number;
 }
 
 export default function StatsPage() {
@@ -33,137 +32,169 @@ export default function StatsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const userEmail = 'allofdaniel1@gmail.com';
-
   useEffect(() => {
-    async function fetchData() {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const [attendanceRes, resultsRes, configRes] = await Promise.all([
-          fetch(`/api/attendance?email=${userEmail}`),
-          fetch(`/api/results?email=${userEmail}`),
-          fetch('/api/config'),
-        ]);
-
-        if (!attendanceRes.ok || !resultsRes.ok || !configRes.ok) {
-          throw new Error('Failed to fetch data');
-        }
-
-        const [attendanceData, resultsData, configData] = await Promise.all([
-          attendanceRes.json(),
-          resultsRes.json(),
-          configRes.json(),
-        ]);
-
-        setAttendance(attendanceData);
-        setResults(resultsData);
-        setConfig(configData);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load data');
-      } finally {
-        setLoading(false);
-      }
-    }
-
     fetchData();
   }, []);
 
-  // Calculate streak (consecutive days from today backward)
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [attendanceRes, resultsRes, configRes] = await Promise.all([
+        fetch("/api/attendance?email=allofdaniel1@gmail.com"),
+        fetch("/api/results?email=allofdaniel1@gmail.com"),
+        fetch("/api/config"),
+      ]);
+
+      if (!attendanceRes.ok || !resultsRes.ok || !configRes.ok) {
+        throw new Error("Failed to fetch data");
+      }
+
+      const attendanceData = await attendanceRes.json();
+      const resultsData = await resultsRes.json();
+      const configData = await configRes.json();
+
+      setAttendance(attendanceData);
+      setResults(resultsData);
+      setConfig(configData);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Calculate streak
   const calculateStreak = () => {
-    if (attendance.length === 0) return 0;
-
-    // Get unique dates with attendance
-    const uniqueDates = Array.from(
-      new Set(attendance.map((a) => a.Date))
-    ).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-
+    const sortedDates = [...new Set(attendance.map((a) => a.Date))].sort(
+      (a, b) => new Date(b).getTime() - new Date(a).getTime()
+    );
+    let streak = 0;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    let streak = 0;
-    let checkDate = new Date(today);
-
-    for (const dateStr of uniqueDates) {
-      const date = new Date(dateStr);
+    for (let i = 0; i < sortedDates.length; i++) {
+      const date = new Date(sortedDates[i]);
       date.setHours(0, 0, 0, 0);
+      const daysDiff = Math.floor(
+        (today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24)
+      );
 
-      // Check if this date matches our expected date
-      if (date.getTime() === checkDate.getTime()) {
+      if (daysDiff === i) {
         streak++;
-        checkDate.setDate(checkDate.getDate() - 1);
-      } else if (date.getTime() < checkDate.getTime()) {
-        // Gap found, stop counting
+      } else {
         break;
       }
     }
-
     return streak;
   };
 
-  // Calculate quiz accuracy
-  const calculateAccuracy = () => {
-    if (results.length === 0) return { accuracy: 0, correct: 0, total: 0 };
+  // Calculate accuracy
+  const accuracy =
+    results.length > 0
+      ? Math.round(
+          (results.filter((r) => r.IsCorrect).length / results.length) * 100
+        )
+      : 0;
 
-    const correct = results.filter((r) => r.IsCorrect).length;
-    const total = results.length;
-    const accuracy = (correct / total) * 100;
-
-    return { accuracy: Math.round(accuracy), correct, total };
-  };
-
-  // Get calendar data for current month
-  const getCalendarData = () => {
+  // Generate calendar heatmap
+  const generateCalendar = () => {
     const today = new Date();
-    const year = today.getFullYear();
-    const month = today.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+    const firstDay = new Date(currentYear, currentMonth, 1);
+    const lastDay = new Date(currentYear, currentMonth + 1, 0);
     const daysInMonth = lastDay.getDate();
-    const startDayOfWeek = firstDay.getDay(); // 0 = Sunday
+    const startDayOfWeek = firstDay.getDay();
 
-    // Count attendance types per date
-    const attendanceByDate = new Map<string, Set<string>>();
-    attendance.forEach((a) => {
-      const date = a.Date;
-      if (!attendanceByDate.has(date)) {
-        attendanceByDate.set(date, new Set());
+    const calendar = [];
+    let week = [];
+
+    // Add empty cells for days before the first day
+    for (let i = 0; i < startDayOfWeek; i++) {
+      week.push(null);
+    }
+
+    // Add all days of the month
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(
+        2,
+        "0"
+      )}-${String(day).padStart(2, "0")}`;
+      const dayAttendance = attendance.filter((a) => a.Date === dateStr);
+      const completed = dayAttendance.filter((a) => a.Completed);
+
+      week.push({
+        day,
+        dateStr,
+        level:
+          completed.length === 0
+            ? "none"
+            : completed.length === dayAttendance.length
+            ? "full"
+            : "partial",
+        isToday:
+          day === today.getDate() &&
+          currentMonth === today.getMonth() &&
+          currentYear === today.getFullYear(),
+      });
+
+      if (week.length === 7) {
+        calendar.push(week);
+        week = [];
       }
-      attendanceByDate.get(date)!.add(a.Type);
-    });
+    }
 
-    return { year, month, daysInMonth, startDayOfWeek, attendanceByDate };
+    // Add remaining week if not empty
+    if (week.length > 0) {
+      while (week.length < 7) {
+        week.push(null);
+      }
+      calendar.push(week);
+    }
+
+    return calendar;
   };
 
-  // Get last 7 days performance
-  const getLast7DaysPerformance = () => {
-    const days = [];
+  // Last 7 days performance
+  const getLast7Days = () => {
+    const last7 = [];
     const today = new Date();
 
     for (let i = 6; i >= 0; i--) {
       const date = new Date(today);
       date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
-      const dayName = ['일', '월', '화', '수', '목', '금', '토'][date.getDay()];
-
-      // Calculate accuracy for this day
+      const dateStr = date.toISOString().split("T")[0];
       const dayResults = results.filter((r) => r.Timestamp.startsWith(dateStr));
-      const correct = dayResults.filter((r) => r.IsCorrect).length;
-      const total = dayResults.length;
-      const accuracy = total > 0 ? (correct / total) * 100 : 0;
+      const dayAccuracy =
+        dayResults.length > 0
+          ? Math.round(
+              (dayResults.filter((r) => r.IsCorrect).length /
+                dayResults.length) *
+                100
+            )
+          : 0;
 
-      days.push({ date: dateStr, dayName, accuracy: Math.round(accuracy), total });
+      last7.push({
+        date: dateStr,
+        label: date.toLocaleDateString("ko-KR", { weekday: "short" }),
+        accuracy: dayAccuracy,
+        count: dayResults.length,
+      });
     }
 
-    return days;
+    return last7;
   };
+
+  const streak = calculateStreak();
+  const calendar = generateCalendar();
+  const last7Days = getLast7Days();
+  const correctCount = results.filter((r) => r.IsCorrect).length;
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-gray-400">Loading...</div>
+        <div className="text-zinc-600">Loading...</div>
       </div>
     );
   }
@@ -171,148 +202,147 @@ export default function StatsPage() {
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-red-500">Error: {error}</div>
+        <div className="text-red-400">{error}</div>
       </div>
     );
   }
 
-  const streak = calculateStreak();
-  const { accuracy, correct, total } = calculateAccuracy();
-  const calendarData = getCalendarData();
-  const last7Days = getLast7DaysPerformance();
   const monthNames = [
-    '1월', '2월', '3월', '4월', '5월', '6월',
-    '7월', '8월', '9월', '10월', '11월', '12월',
+    "1월",
+    "2월",
+    "3월",
+    "4월",
+    "5월",
+    "6월",
+    "7월",
+    "8월",
+    "9월",
+    "10월",
+    "11월",
+    "12월",
   ];
+  const today = new Date();
 
   return (
     <div className="space-y-6">
-        {/* Header */}
-        <h1 className="text-3xl font-bold mb-6">📊 학습 통계</h1>
+      {/* Header */}
+      <div className="animate-fade-in">
+        <h1 className="text-3xl font-bold text-zinc-100 mb-2">
+          📊 학습 통계
+        </h1>
+        <p className="text-zinc-400">당신의 학습 여정을 확인하세요</p>
+      </div>
 
-        {/* Streak Card */}
-        <div className="bg-gradient-to-br from-green-900/40 to-green-800/40 rounded-lg p-6 border border-green-700/50">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-green-300 text-sm mb-1">연속 출석일</p>
-              <p className="text-5xl font-bold text-white">{streak}</p>
-              <p className="text-green-300 text-sm mt-1">일 연속</p>
-            </div>
-            <div className="text-6xl">🔥</div>
+      {/* Streak Card */}
+      <div className="card p-6 bg-gradient-to-br from-emerald-900/30 to-emerald-800/20 border-emerald-500/20 animate-fade-in stagger-1">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-zinc-100 mb-1">
+              연속 학습
+            </h3>
+            <p className="text-sm text-zinc-400">계속 이어가세요!</p>
+          </div>
+          <div className="text-5xl font-bold text-emerald-400">
+            {streak} 🔥
           </div>
         </div>
+      </div>
 
-        {/* Calendar Heatmap */}
-        <div className="bg-gray-800/50 rounded-lg p-6 border border-gray-700">
-          <h2 className="text-xl font-semibold mb-4">
-            {calendarData.year}년 {monthNames[calendarData.month]}
-          </h2>
-          <div className="grid grid-cols-7 gap-2">
-            {/* Day headers */}
-            {['일', '월', '화', '수', '목', '금', '토'].map((day) => (
-              <div key={day} className="text-center text-xs text-gray-400 mb-1">
+      {/* Calendar Heatmap */}
+      <div className="card p-6 animate-fade-in stagger-2">
+        <h3 className="text-lg font-semibold text-zinc-100 mb-4">
+          {monthNames[today.getMonth()]} {today.getFullYear()}
+        </h3>
+        <div className="space-y-2">
+          <div className="grid grid-cols-7 gap-2 text-xs text-zinc-600 mb-2">
+            {["일", "월", "화", "수", "목", "금", "토"].map((day) => (
+              <div key={day} className="text-center">
                 {day}
               </div>
             ))}
-
-            {/* Empty cells for offset */}
-            {Array.from({ length: calendarData.startDayOfWeek }).map((_, i) => (
-              <div key={`empty-${i}`} className="aspect-square" />
-            ))}
-
-            {/* Calendar days */}
-            {Array.from({ length: calendarData.daysInMonth }).map((_, i) => {
-              const day = i + 1;
-              const date = new Date(calendarData.year, calendarData.month, day);
-              const dateStr = date.toISOString().split('T')[0];
-              const attendanceTypes = calendarData.attendanceByDate.get(dateStr);
-              const attendanceCount = attendanceTypes ? attendanceTypes.size : 0;
-
-              const today = new Date();
-              today.setHours(0, 0, 0, 0);
-              const isToday = date.getTime() === today.getTime();
-
-              let bgColor = 'bg-gray-700/50';
-              if (attendanceCount === 1 || attendanceCount === 2) {
-                bgColor = 'bg-yellow-500/60';
-              } else if (attendanceCount >= 3) {
-                bgColor = 'bg-green-500/60';
-              }
-
-              return (
+          </div>
+          {calendar.map((week, weekIdx) => (
+            <div key={weekIdx} className="grid grid-cols-7 gap-2">
+              {week.map((day, dayIdx) => (
                 <div
-                  key={day}
-                  className={`aspect-square rounded-md ${bgColor} flex items-center justify-center text-sm ${
-                    isToday ? 'ring-2 ring-purple-500' : ''
+                  key={dayIdx}
+                  className={`aspect-square rounded flex items-center justify-center text-sm ${
+                    !day
+                      ? ""
+                      : day.isToday
+                      ? "ring-2 ring-violet-500"
+                      : ""
+                  } ${
+                    !day
+                      ? "bg-transparent"
+                      : day.level === "none"
+                      ? "bg-zinc-800/50 text-zinc-600"
+                      : day.level === "partial"
+                      ? "bg-amber-500/50 text-amber-100"
+                      : "bg-emerald-500/50 text-emerald-100"
                   }`}
                 >
-                  {day}
+                  {day?.day}
                 </div>
-              );
-            })}
-          </div>
-          <div className="flex gap-4 mt-4 text-xs text-gray-400">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded bg-gray-700/50"></div>
-              <span>없음</span>
+              ))}
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded bg-yellow-500/60"></div>
-              <span>일부</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded bg-green-500/60"></div>
-              <span>완료</span>
-            </div>
-          </div>
+          ))}
         </div>
+      </div>
 
-        {/* Quiz Performance Card */}
-        <div className="bg-gray-800/50 rounded-lg p-6 border border-gray-700">
-          <h2 className="text-xl font-semibold mb-4">퀴즈 성적</h2>
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <div
-                className="w-32 h-32 rounded-full mx-auto relative"
-                style={{
-                  background: `conic-gradient(#10b981 ${accuracy * 3.6}deg, #374151 0deg)`,
-                }}
-              >
-                <div className="absolute inset-2 bg-gray-800 rounded-full flex items-center justify-center">
-                  <span className="text-3xl font-bold">{accuracy}%</span>
+      {/* Quiz Performance */}
+      <div className="card p-6 animate-fade-in stagger-3">
+        <h3 className="text-lg font-semibold text-zinc-100 mb-4">
+          퀴즈 성과
+        </h3>
+        <div className="flex items-center justify-center gap-8">
+          <div className="relative w-32 h-32">
+            <div
+              className="w-full h-full rounded-full"
+              style={{
+                background: `conic-gradient(from 0deg, #a855f7 0%, #ec4899 ${accuracy}%, #27272a ${accuracy}%)`,
+              }}
+            ></div>
+            <div className="absolute inset-2 bg-black rounded-full flex items-center justify-center">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-zinc-100">
+                  {accuracy}%
                 </div>
+                <div className="text-xs text-zinc-600">정확도</div>
               </div>
             </div>
-            <div className="flex-1 text-right">
-              <p className="text-gray-400 text-sm mb-2">총 {total}문제 중</p>
-              <p className="text-4xl font-bold text-green-400">{correct}</p>
-              <p className="text-gray-400 text-sm mt-2">개 정답</p>
+          </div>
+          <div className="space-y-2">
+            <div className="text-sm text-zinc-400">
+              정답: <span className="text-emerald-400 font-semibold">{correctCount}</span>
+            </div>
+            <div className="text-sm text-zinc-400">
+              전체: <span className="text-zinc-100 font-semibold">{results.length}</span>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Daily Breakdown */}
-        <div className="bg-gray-800/50 rounded-lg p-6 border border-gray-700">
-          <h2 className="text-xl font-semibold mb-4">최근 7일 성적</h2>
-          <div className="flex items-end justify-between gap-2 h-48">
-            {last7Days.map((day) => (
-              <div key={day.date} className="flex-1 flex flex-col items-center gap-2">
-                <div className="flex-1 w-full flex items-end">
-                  <div
-                    className="w-full bg-gradient-to-t from-purple-500 to-purple-400 rounded-t-md transition-all"
-                    style={{ height: `${day.accuracy}%` }}
-                  />
-                </div>
-                <div className="text-center">
-                  <p className="text-xs text-gray-400">{day.dayName}</p>
-                  {day.total > 0 && (
-                    <p className="text-xs text-purple-400 mt-1">{day.accuracy}%</p>
-                  )}
-                </div>
+      {/* Last 7 Days Bar Chart */}
+      <div className="card p-6 animate-fade-in stagger-4">
+        <h3 className="text-lg font-semibold text-zinc-100 mb-4">
+          최근 7일 성과
+        </h3>
+        <div className="flex items-end justify-between gap-2 h-48">
+          {last7Days.map((day, idx) => (
+            <div key={idx} className="flex-1 flex flex-col items-center gap-2">
+              <div className="flex-1 w-full flex items-end">
+                <div
+                  className="w-full bg-gradient-to-t from-violet-500 to-pink-500 rounded-t transition-all"
+                  style={{ height: `${day.accuracy}%` }}
+                  title={`${day.accuracy}% (${day.count}문제)`}
+                ></div>
               </div>
-            ))}
-          </div>
+              <div className="text-xs text-zinc-600">{day.label}</div>
+            </div>
+          ))}
         </div>
+      </div>
     </div>
   );
 }

@@ -1,26 +1,25 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from "react";
 
 interface WrongWord {
-  email: string;
-  word: string;
-  meaning: string;
-  wrongCount: number;
-  lastWrong: string;
-  nextReview: string;
-  mastered: boolean;
+  Email: string;
+  Word: string;
+  Meaning: string;
+  WrongCount: number;
+  LastWrong: string;
+  NextReview: string;
+  Mastered: boolean;
 }
 
-type FilterType = '전체' | '복습필요' | '마스터';
+type FilterType = "전체" | "복습필요" | "마스터";
 
-export default function WrongWordsPage() {
+export default function WrongPage() {
   const [wrongWords, setWrongWords] = useState<WrongWord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<FilterType>('전체');
+  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<FilterType>("전체");
   const [updatingWords, setUpdatingWords] = useState<Set<string>>(new Set());
-
-  const email = 'allofdaniel1@gmail.com';
 
   useEffect(() => {
     fetchWrongWords();
@@ -29,41 +28,36 @@ export default function WrongWordsPage() {
   const fetchWrongWords = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/wrong?email=${email}`);
-      if (!response.ok) throw new Error('Failed to fetch');
+      const response = await fetch("/api/wrong?email=allofdaniel1@gmail.com");
+      if (!response.ok) throw new Error("Failed to fetch wrong words");
       const data = await response.json();
       setWrongWords(data);
-    } catch (error) {
-      console.error('Error fetching wrong words:', error);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load data");
     } finally {
       setLoading(false);
     }
   };
 
   const toggleMastered = async (word: string, currentMastered: boolean) => {
+    setUpdatingWords((prev) => new Set(prev).add(word));
     try {
-      setUpdatingWords(prev => new Set(prev).add(word));
-
-      const response = await fetch('/api/wrong', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/wrong", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email,
+          email: "allofdaniel1@gmail.com",
           word,
-          data: { mastered: !currentMastered }
-        })
+          data: { Mastered: !currentMastered },
+        }),
       });
-
-      if (!response.ok) throw new Error('Failed to update');
-
-      // Update local state
-      setWrongWords(prev =>
-        prev.map(w => w.word === word ? { ...w, mastered: !currentMastered } : w)
-      );
-    } catch (error) {
-      console.error('Error updating word:', error);
+      if (!response.ok) throw new Error("Failed to update word");
+      await fetchWrongWords();
+    } catch (err) {
+      console.error("Failed to toggle mastered:", err);
     } finally {
-      setUpdatingWords(prev => {
+      setUpdatingWords((prev) => {
         const next = new Set(prev);
         next.delete(word);
         return next;
@@ -71,212 +65,175 @@ export default function WrongWordsPage() {
     }
   };
 
-  // Filter words
-  const filteredWords = wrongWords.filter(w => {
-    if (filter === '복습필요') return !w.mastered;
-    if (filter === '마스터') return w.mastered;
+  const filteredWords = wrongWords.filter((w) => {
+    if (filter === "복습필요") return !w.Mastered;
+    if (filter === "마스터") return w.Mastered;
     return true;
   });
 
-  // Sort by wrong count descending
-  const sortedWords = [...filteredWords].sort((a, b) => b.wrongCount - a.wrongCount);
-
-  // Calculate stats
-  const totalCount = wrongWords.length;
-  const masteredCount = wrongWords.filter(w => w.mastered).length;
-  const today = new Date().toISOString().split('T')[0];
-  const todayReviewCount = wrongWords.filter(w =>
-    !w.mastered && w.nextReview <= today
+  const masteredCount = wrongWords.filter((w) => w.Mastered).length;
+  const todayReviewCount = wrongWords.filter(
+    (w) => w.NextReview && new Date(w.NextReview) <= new Date()
   ).length;
-  const avgWrongCount = wrongWords.length > 0
-    ? (wrongWords.reduce((sum, w) => sum + w.wrongCount, 0) / wrongWords.length).toFixed(1)
-    : '0';
-
-  // Get badge color based on wrong count
-  const getBadgeColor = (count: number) => {
-    if (count >= 3) return 'from-red-600 to-red-500';
-    if (count === 2) return 'from-yellow-600 to-yellow-500';
-    return 'from-green-600 to-green-500';
-  };
-
-  // Check if review is due
-  const isReviewDue = (nextReview: string) => {
-    return nextReview <= today;
-  };
+  const avgWrongCount =
+    wrongWords.length > 0
+      ? (
+          wrongWords.reduce((sum, w) => sum + w.WrongCount, 0) /
+          wrongWords.length
+        ).toFixed(1)
+      : "0";
 
   if (loading) {
     return (
-      <div className="space-y-6">
-          {/* Header Skeleton */}
-          <div className="mb-8">
-            <div className="h-10 w-48 bg-gray-800 rounded animate-pulse mb-2"></div>
-            <div className="h-6 w-64 bg-gray-800 rounded animate-pulse"></div>
-          </div>
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-zinc-600">Loading...</div>
+      </div>
+    );
+  }
 
-          {/* Tabs Skeleton */}
-          <div className="flex gap-2 mb-6">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="h-10 w-24 bg-gray-800 rounded animate-pulse"></div>
-            ))}
-          </div>
-
-          {/* Stats Skeleton */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="h-24 bg-gray-800 rounded-lg animate-pulse"></div>
-            ))}
-          </div>
-
-          {/* Cards Skeleton */}
-          {[1, 2, 3].map(i => (
-            <div key={i} className="h-40 bg-gray-800 rounded-lg mb-4 animate-pulse"></div>
-          ))}
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-red-400">{error}</div>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">
-            ❌ 오답 노트
-          </h1>
-          <p className="text-gray-400">
-            총 {totalCount}개 단어 | 마스터 {masteredCount}개
-          </p>
-        </div>
+      {/* Header */}
+      <div className="animate-fade-in">
+        <h1 className="text-3xl font-bold text-zinc-100 mb-2">
+          ❌ 오답 노트
+        </h1>
+        <p className="text-zinc-400">
+          총 {wrongWords.length}개 단어 | 마스터 {masteredCount}개
+        </p>
+      </div>
 
-        {/* Filter Tabs */}
-        <div className="flex gap-2 mb-6 overflow-x-auto">
-          {(['전체', '복습필요', '마스터'] as FilterType[]).map(tab => (
-            <button
-              key={tab}
-              onClick={() => setFilter(tab)}
-              className={`px-6 py-2 rounded-lg font-medium transition-all whitespace-nowrap ${
-                filter === tab
-                  ? 'bg-red-500 text-white shadow-lg'
-                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
+      {/* Filter Tabs */}
+      <div className="flex gap-3 animate-fade-in stagger-1">
+        {(["전체", "복습필요", "마스터"] as FilterType[]).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setFilter(tab)}
+            className={`px-4 py-2 rounded-lg transition-all ${
+              filter === tab
+                ? "bg-violet-600 text-white"
+                : "bg-zinc-900 text-zinc-400 hover:bg-zinc-800"
+            }`}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
 
-        {/* Spaced Repetition Info */}
-        <div className="bg-gradient-to-r from-gray-800 to-gray-700 rounded-lg p-6 mb-6 border border-gray-600">
-          <h3 className="text-white font-semibold mb-2 flex items-center gap-2">
-            <span>📚</span>
-            간격 반복 학습 시스템
-          </h3>
-          <p className="text-gray-300 text-sm mb-3">
-            틀린 횟수에 따라 자동 복습 일정이 정해집니다
-          </p>
-          <div className="flex flex-wrap gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-              <span className="text-gray-300">1회: 다음날</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-yellow-500 rounded-full"></span>
-              <span className="text-gray-300">2회: 3일 후</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-red-500 rounded-full"></span>
-              <span className="text-gray-300">3회 이상: 7일 후</span>
-            </div>
+      {/* Spaced Repetition Info */}
+      <div className="card p-5 animate-fade-in stagger-2">
+        <h3 className="text-lg font-semibold text-zinc-100 mb-3">
+          📚 복습 주기 시스템
+        </h3>
+        <div className="space-y-2 text-sm text-zinc-400">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-green-500"></div>
+            <span>1회 오답: 다음 날 복습</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+            <span>2회 오답: 3일 후 복습</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-red-500"></div>
+            <span>3회 이상: 7일 후 복습</span>
           </div>
         </div>
+      </div>
 
-        {/* Summary Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <p className="text-gray-400 text-sm mb-1">전체 오답 단어</p>
-            <p className="text-3xl font-bold text-white">{totalCount}</p>
+      {/* Stats Row */}
+      <div className="grid grid-cols-3 gap-4 animate-fade-in stagger-3">
+        <div className="card p-5">
+          <div className="text-2xl font-bold text-zinc-100">
+            {wrongWords.length}
           </div>
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <p className="text-gray-400 text-sm mb-1">오늘 복습할 단어</p>
-            <p className="text-3xl font-bold text-red-500">{todayReviewCount}</p>
-          </div>
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <p className="text-gray-400 text-sm mb-1">평균 오답 횟수</p>
-            <p className="text-3xl font-bold text-yellow-500">{avgWrongCount}</p>
-          </div>
+          <div className="text-sm text-zinc-400">전체 오답</div>
         </div>
+        <div className="card p-5">
+          <div className="text-2xl font-bold text-pink-500">
+            {todayReviewCount}
+          </div>
+          <div className="text-sm text-zinc-400">오늘 복습</div>
+        </div>
+        <div className="card p-5">
+          <div className="text-2xl font-bold text-violet-500">
+            {avgWrongCount}
+          </div>
+          <div className="text-sm text-zinc-400">평균 오답</div>
+        </div>
+      </div>
 
-        {/* Wrong Words List */}
-        {sortedWords.length === 0 ? (
-          <div className="bg-gray-800 rounded-lg p-12 text-center border border-gray-700">
-            <p className="text-gray-400 text-lg">
-              {filter === '전체'
-                ? '아직 오답이 없습니다! 🎉'
-                : filter === '복습필요'
-                ? '복습할 단어가 없습니다!'
-                : '마스터한 단어가 없습니다!'}
-            </p>
+      {/* Word List */}
+      <div className="space-y-3">
+        {filteredWords.length === 0 ? (
+          <div className="card p-6 text-center text-zinc-600">
+            {filter === "마스터"
+              ? "아직 마스터한 단어가 없습니다"
+              : "오답 단어가 없습니다"}
           </div>
         ) : (
-          <div className="space-y-4">
-            {sortedWords.map(word => (
-              <div
-                key={word.word}
-                className="bg-gray-800 rounded-lg p-6 border border-gray-700 hover:border-gray-600 transition-all"
-              >
-                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-                  {/* Word Info */}
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-2xl font-bold text-white">{word.word}</h3>
-                      <span
-                        className={`px-3 py-1 rounded-full text-white text-sm font-semibold bg-gradient-to-r ${getBadgeColor(
-                          word.wrongCount
-                        )}`}
-                      >
-                        {word.wrongCount}회
+          filteredWords.map((word, idx) => (
+            <div
+              key={word.Word}
+              className={`card p-5 animate-fade-in stagger-${Math.min(idx, 5)}`}
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <h3 className="text-xl font-semibold text-zinc-100">
+                      {word.Word}
+                    </h3>
+                    <span
+                      className={`px-2 py-1 rounded text-xs font-semibold ${
+                        word.WrongCount >= 3
+                          ? "bg-red-500/20 text-red-400"
+                          : word.WrongCount === 2
+                          ? "bg-yellow-500/20 text-yellow-400"
+                          : "bg-green-500/20 text-green-400"
+                      }`}
+                    >
+                      {word.WrongCount}회
+                    </span>
+                    {word.Mastered && (
+                      <span className="px-2 py-1 rounded text-xs font-semibold bg-violet-500/20 text-violet-400">
+                        마스터
                       </span>
-                      {word.mastered && (
-                        <span className="px-3 py-1 rounded-full bg-green-600 text-white text-xs font-semibold">
-                          마스터
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-gray-300 mb-4">{word.meaning}</p>
-
-                    <div className="flex flex-wrap gap-4 text-sm">
-                      <div className="text-gray-400">
-                        <span className="text-gray-500">마지막 오답:</span>{' '}
-                        {new Date(word.lastWrong).toLocaleDateString('ko-KR')}
-                      </div>
-                      <div className={`${isReviewDue(word.nextReview) && !word.mastered ? 'text-red-400 font-semibold' : 'text-gray-400'}`}>
-                        <span className="text-gray-500">다음 복습:</span>{' '}
-                        {new Date(word.nextReview).toLocaleDateString('ko-KR')}
-                        {isReviewDue(word.nextReview) && !word.mastered && ' 🔔'}
-                      </div>
-                    </div>
+                    )}
                   </div>
-
-                  {/* Master Toggle Button */}
-                  <button
-                    onClick={() => toggleMastered(word.word, word.mastered)}
-                    disabled={updatingWords.has(word.word)}
-                    className={`px-6 py-2 rounded-lg font-medium transition-all whitespace-nowrap ${
-                      word.mastered
-                        ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                        : 'bg-green-600 text-white hover:bg-green-500'
-                    } disabled:opacity-50 disabled:cursor-not-allowed`}
-                  >
-                    {updatingWords.has(word.word)
-                      ? '처리중...'
-                      : word.mastered
-                      ? '마스터 취소'
-                      : '마스터 완료'}
-                  </button>
+                  <p className="text-zinc-400 mb-3">{word.Meaning}</p>
+                  <div className="flex gap-4 text-sm text-zinc-600">
+                    <span>마지막 오답: {word.LastWrong}</span>
+                    <span>다음 복습: {word.NextReview}</span>
+                  </div>
                 </div>
+                <button
+                  onClick={() => toggleMastered(word.Word, word.Mastered)}
+                  disabled={updatingWords.has(word.Word)}
+                  className={`px-4 py-2 rounded-lg transition-all ${
+                    word.Mastered
+                      ? "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
+                      : "bg-gradient-to-r from-violet-500 to-pink-500 text-white hover:opacity-90"
+                  } disabled:opacity-50`}
+                >
+                  {updatingWords.has(word.Word)
+                    ? "..."
+                    : word.Mastered
+                    ? "마스터 취소"
+                    : "마스터 처리"}
+                </button>
               </div>
-            ))}
-          </div>
+            </div>
+          ))
         )}
+      </div>
     </div>
   );
 }
