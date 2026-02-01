@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getWrongWords, updateWrongWord } from '@/lib/sheets';
+import { getWrongWords, updateWrongWord } from '@/lib/db';
 
 // GET /api/wrong?email=X - Get wrong words (optionally filtered by email)
 export async function GET(request: NextRequest) {

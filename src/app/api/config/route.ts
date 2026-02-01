@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getConfig, updateConfig } from '@/lib/sheets';
+import { getConfig, updateConfig } from '@/lib/db';
 
 // GET /api/config - Get configuration
 export async function GET() {

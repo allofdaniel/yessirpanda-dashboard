@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getWords, getAllWords } from '@/lib/sheets';
+import { getWords, getAllWords } from '@/lib/db';
 
 // GET /api/words?day=N - Get words (optionally filtered by day)
 export async function GET(request: NextRequest) {

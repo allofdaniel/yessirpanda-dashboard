@@ -9,11 +9,12 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "googleapis": "^170.1.0",
+    "@supabase/supabase-js": "^2.93.3",
     "next": "16.1.6",
     "playwright": "^1.58.0",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "resend": "^6.9.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAttendance, addAttendance } from '@/lib/sheets';
+import { getAttendance, addAttendance } from '@/lib/db';
 
 // GET /api/attendance?email=X - Get attendance (optionally filtered by email)
 export async function GET(request: NextRequest) {

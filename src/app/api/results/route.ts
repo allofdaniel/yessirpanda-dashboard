@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getResults } from '@/lib/sheets';
+import { getResults } from '@/lib/db';
 
 // GET /api/results?email=X&day=N - Get results (optionally filtered by email and day)
 export async function GET(request: NextRequest) {

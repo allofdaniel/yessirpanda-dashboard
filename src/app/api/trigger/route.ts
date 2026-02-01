@@ -1,16 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const N8N_WEBHOOK_BASE = process.env.N8N_WEBHOOK_BASE;
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-// Workflow webhook paths
-const WORKFLOW_WEBHOOKS: Record<string, string> = {
-  'morning-words': '/morning-words',
-  'morning-test': '/morning-test',
-  'lunch-test': '/lunch-test',
-  'evening-review': '/evening-review',
-};
+const VALID_WORKFLOWS = ['morning-words', 'morning-test', 'lunch-test', 'evening-review'];
 
-// POST /api/n8n/trigger - Trigger n8n workflow
+// POST /api/trigger - Trigger a Supabase Edge Function
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -23,28 +18,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!WORKFLOW_WEBHOOKS[workflow]) {
+    if (!VALID_WORKFLOWS.includes(workflow)) {
       return NextResponse.json(
-        { 
-          error: 'Invalid workflow. Must be one of: morning-words, morning-test, lunch-test, evening-review' 
-        },
+        { error: `Invalid workflow. Must be one of: ${VALID_WORKFLOWS.join(', ')}` },
         { status: 400 }
       );
     }
 
-    if (!N8N_WEBHOOK_BASE) {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
       return NextResponse.json(
-        { error: 'N8N_WEBHOOK_BASE environment variable not configured' },
+        { error: 'Supabase environment variables not configured' },
         { status: 500 }
       );
     }
 
-    const webhookUrl = `${N8N_WEBHOOK_BASE}${WORKFLOW_WEBHOOKS[workflow]}`;
+    const functionUrl = `${SUPABASE_URL}/functions/v1/${workflow}`;
 
-    // Trigger the n8n webhook
-    const response = await fetch(webhookUrl, {
+    const response = await fetch(functionUrl, {
       method: 'POST',
       headers: {
+        'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -54,7 +47,8 @@ export async function POST(request: NextRequest) {
     });
 
     if (!response.ok) {
-      throw new Error(`n8n webhook failed with status ${response.status}`);
+      const text = await response.text();
+      throw new Error(`Edge Function failed (${response.status}): ${text}`);
     }
 
     const result = await response.json();
@@ -62,15 +56,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       workflow,
-      webhookUrl,
       result,
     });
   } catch (error) {
-    console.error('Error triggering n8n workflow:', error);
+    console.error('Error triggering workflow:', error);
     return NextResponse.json(
-      { 
+      {
         error: 'Failed to trigger workflow',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        details: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
     );

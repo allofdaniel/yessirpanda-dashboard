@@ -1,0 +1,27 @@
+{
+  "name": "옛설판다",
+  "short_name": "옛설판다",
+  "description": "비즈니스 영어 학습 대시보드 - 단어장, 오답 노트, 학습 통계",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["education"],
+  "lang": "ko",
+  "dir": "ltr"
+}

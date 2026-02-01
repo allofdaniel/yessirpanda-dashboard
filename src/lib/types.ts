@@ -3,7 +3,7 @@
 export interface Config {
   CurrentDay: string;
   TotalDays: string;
-  SpreadsheetId?: string;
+  WordsPerDay?: string;
 }
 
 export interface Word {
@@ -49,4 +49,58 @@ export interface Attendance {
 export interface ConfigRow {
   Key: string;
   Value: string;
+}
+
+// Supabase DB row types (snake_case)
+export interface DbConfig {
+  id: number;
+  key: string;
+  value: string;
+  updated_at: string;
+}
+
+export interface DbWord {
+  id: number;
+  day: number;
+  word: string;
+  meaning: string;
+}
+
+export interface DbSubscriber {
+  id: number;
+  email: string;
+  name: string;
+  status: 'active' | 'inactive';
+  created_at: string;
+}
+
+export interface DbWrongWord {
+  id: number;
+  email: string;
+  word: string;
+  meaning: string;
+  wrong_count: number;
+  last_wrong: string | null;
+  next_review: string | null;
+  mastered: boolean;
+}
+
+export interface DbResult {
+  id: number;
+  email: string;
+  day: number;
+  quiz_type: 'morning' | 'lunch';
+  word: string;
+  correct_answer: string;
+  user_answer: string;
+  is_correct: boolean;
+  timestamp: string;
+}
+
+export interface DbAttendance {
+  id: number;
+  email: string;
+  date: string;
+  type: 'morning' | 'lunch' | 'evening';
+  completed: boolean;
 }
