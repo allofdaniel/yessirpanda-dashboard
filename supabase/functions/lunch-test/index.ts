@@ -5,6 +5,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const BASE = 'https://dashboard-keprojects.vercel.app'
+
 function shuffleArray<T>(arr: T[]): T[] {
   const shuffled = [...arr]
   for (let i = shuffled.length - 1; i > 0; i--) {
@@ -26,14 +28,11 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    // Get config
     const { data: configData } = await supabase.from('config').select('key, value')
     const config: Record<string, string> = {}
     configData?.forEach((r: { key: string; value: string }) => { config[r.key] = r.value })
     const currentDay = parseInt(config.CurrentDay || '1')
-    const totalDays = parseInt(config.TotalDays || '10')
 
-    // Get words for current day
     const { data: words } = await supabase
       .from('words')
       .select('word, meaning')
@@ -42,12 +41,10 @@ Deno.serve(async (req) => {
 
     if (!words || words.length === 0) {
       return new Response(JSON.stringify({ error: `No words for Day ${currentDay}` }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404,
       })
     }
 
-    // Get active subscribers
     const { data: subscribers } = await supabase
       .from('subscribers')
       .select('email, name')
@@ -55,77 +52,54 @@ Deno.serve(async (req) => {
 
     if (!subscribers || subscribers.length === 0) {
       return new Response(JSON.stringify({ error: 'No active subscribers' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404,
       })
     }
 
-    // Build quiz: show English word → recall Korean meaning (reverse of morning)
-    const shuffledWords = shuffleArray(words)
-    const quizItems = shuffledWords.map((w: { word: string; meaning: string }, i: number) => `
-      <div style="background-color:#18181b;border:1px solid #27272a;border-radius:10px;padding:16px;margin-bottom:10px;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-          <span style="background-color:#27272a;color:#a1a1aa;width:24px;height:24px;border-radius:50%;display:inline-block;text-align:center;line-height:24px;font-size:12px;font-weight:700;">${i + 1}</span>
-          <span style="color:#f4f4f5;font-size:16px;font-weight:600;">${w.word}</span>
-        </div>
-        <div style="background-color:#09090b;border:1px dashed #3f3f46;border-radius:8px;padding:12px;text-align:center;">
-          <span style="color:#52525b;font-size:13px;">한국어 뜻을 떠올려보세요</span>
-        </div>
-        <div style="margin-top:8px;text-align:right;">
-          <span style="color:#3f3f46;font-size:12px;">정답: </span>
-          <span style="color:#3f3f46;font-size:12px;background-color:#3f3f46;border-radius:4px;padding:1px 6px;">${w.meaning}</span>
-        </div>
-      </div>
-    `).join('')
+    const shuffled = shuffleArray(words)
 
-    const buildHtml = (name: string) => `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background-color:#09090b;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <div style="max-width:480px;margin:0 auto;padding:24px 16px;">
-    <!-- Header -->
-    <div style="text-align:center;padding:24px 0;">
-      <div style="font-size:40px;margin-bottom:8px;">🐼</div>
-      <h1 style="color:#f4f4f5;font-size:22px;margin:0 0 4px;">옛설판다</h1>
-      <p style="color:#71717a;font-size:13px;margin:0;">비즈니스 영어 마스터</p>
-    </div>
+    const buildHtml = (name: string, email: string) => {
+      const e = encodeURIComponent(email)
+      const completeLink = `${BASE}/api/complete?email=${e}&day=${currentDay}`
 
-    <!-- Day Badge -->
-    <div style="text-align:center;margin-bottom:20px;">
-      <span style="display:inline-block;background:linear-gradient(135deg,#10b981,#14b8a6);color:#fff;padding:6px 16px;border-radius:20px;font-size:13px;font-weight:700;">
-        🍽️ Day ${currentDay} 점심 복습
-      </span>
-    </div>
+      const rows = shuffled.map((w: { word: string; meaning: string }, i: number) => {
+        const relearnLink = `${BASE}/api/relearn?email=${e}&day=${currentDay}&word=${encodeURIComponent(w.word)}&meaning=${encodeURIComponent(w.meaning)}`
+        return `<tr>
+<td style="padding:4px 6px;color:#71717a;font-size:11px;border-bottom:1px solid #1e1e1e;text-align:center;width:20px;">${i + 1}</td>
+<td style="padding:4px 6px;color:#f4f4f5;font-size:13px;font-weight:600;border-bottom:1px solid #1e1e1e;">${w.word}</td>
+<td style="padding:4px 6px;color:#1a1a1a;font-size:11px;border-bottom:1px solid #1e1e1e;background:#1a1a1a;border-radius:2px;user-select:all;">${w.meaning}</td>
+<td style="padding:4px 4px;border-bottom:1px solid #1e1e1e;text-align:center;width:44px;"><a href="${relearnLink}" style="color:#f87171;font-size:10px;text-decoration:none;background:#7f1d1d;padding:2px 6px;border-radius:4px;">재학습</a></td>
+</tr>`
+      }).join('')
 
-    <!-- Instructions -->
-    <div style="background-color:#18181b;border:1px solid #27272a;border-radius:12px;padding:20px;margin-bottom:20px;">
-      <p style="color:#f4f4f5;font-size:15px;margin:0 0 8px;"><strong>${name}</strong>님, 점심 복습 시간!</p>
-      <p style="color:#a1a1aa;font-size:14px;margin:0;line-height:1.5;">
-        이번에는 <strong style="color:#10b981;">영어 → 한국어</strong> 방향입니다.<br>
-        영어 단어를 보고 한국어 뜻을 떠올려보세요.
-      </p>
-    </div>
+      return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#09090b;font-family:system-ui,sans-serif;">
+<div style="max-width:420px;margin:0 auto;padding:10px 8px;">
+<div style="text-align:center;padding:8px 0;">
+<span style="font-size:24px;">🐼</span>
+<span style="color:#f4f4f5;font-size:15px;font-weight:700;vertical-align:middle;margin-left:4px;">Day ${currentDay} 점심 테스트</span>
+</div>
+<p style="color:#a1a1aa;font-size:12px;margin:0 0 6px;text-align:center;">${name}님, 뜻을 떠올려보세요 · 정답은 드래그</p>
 
-    <!-- Quiz Items -->
-    ${quizItems}
+<!-- Step 1: 학습 완료 먼저 -->
+<div style="text-align:center;margin:0 0 8px;">
+<a href="${completeLink}" style="display:inline-block;background:linear-gradient(135deg,#10b981,#14b8a6);color:#fff;text-decoration:none;padding:10px 40px;border-radius:8px;font-size:14px;font-weight:700;">① 학습 완료</a>
+</div>
+<p style="text-align:center;color:#71717a;font-size:11px;margin:0 0 8px;">완료 후, 아래에서 재학습할 단어를 눌러주세요 ↓</p>
 
-    <!-- Score Section -->
-    <div style="background-color:#18181b;border:1px solid #27272a;border-radius:12px;padding:20px;margin-top:20px;text-align:center;">
-      <p style="color:#f4f4f5;font-size:15px;margin:0 0 4px;">
-        아침보다 더 많이 맞추셨나요? 🎯
-      </p>
-      <p style="color:#71717a;font-size:13px;margin:0;">저녁에 오늘의 최종 복습 자료를 보내드립니다</p>
-    </div>
+<!-- Step 2: 단어 테이블 + 재학습 -->
+<table style="width:100%;border-collapse:collapse;background:#111;">
+<tr style="background:#18181b;"><th style="padding:4px 6px;color:#71717a;font-size:10px;text-align:left;">#</th><th style="padding:4px 6px;color:#71717a;font-size:10px;text-align:left;">단어</th><th style="padding:4px 6px;color:#71717a;font-size:10px;text-align:left;">정답</th><th style="padding:4px;color:#71717a;font-size:10px;text-align:center;">②</th></tr>
+${rows}
+</table>
+<div style="text-align:center;margin:10px 0 6px;">
+<a href="${BASE}/login" style="display:inline-block;background:#8B5CF6;color:#fff;text-decoration:none;padding:8px 20px;border-radius:8px;font-size:12px;font-weight:600;">📊 내 학습 관리</a>
+</div>
+<p style="text-align:center;color:#3f3f46;font-size:9px;margin:6px 0 0;">옛설판다 · 비즈니스 영어</p>
+</div>
+</body></html>`
+    }
 
-    <!-- Footer -->
-    <div style="text-align:center;padding:16px 0;">
-      <p style="color:#52525b;font-size:12px;margin:0;">옛설판다 · 매일 성장하는 비즈니스 영어</p>
-    </div>
-  </div>
-</body>
-</html>`
-
-    // Send to each subscriber and record attendance
     const results = []
     for (const sub of subscribers) {
       const res = await fetch('https://api.resend.com/emails', {
@@ -137,29 +111,22 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           from: '옛설판다 <onboarding@resend.dev>',
           to: [sub.email],
-          subject: `🍽️ Day ${currentDay} 점심 복습 - 영어 → 한국어 테스트`,
-          html: buildHtml(sub.name || '학습자'),
+          subject: `🍽️ Day ${currentDay} 점심 테스트`,
+          html: buildHtml(sub.name || '학습자', sub.email),
         }),
       })
 
       const resBody = await res.json()
       results.push({ email: sub.email, status: res.status, id: resBody.id || null })
-
-      // Record attendance
-      await supabase.from('attendance').upsert(
-        { email: sub.email, date: new Date().toISOString().slice(0, 10), type: 'lunch', completed: true },
-        { onConflict: 'email,date,type' }
-      )
     }
 
-    return new Response(JSON.stringify({ success: true, day: currentDay, quizWords: words.length, sent: results.length, results }), {
+    return new Response(JSON.stringify({ success: true, day: currentDay, sent: results.length, results }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (error) {
     console.error('lunch-test error:', error)
     return new Response(JSON.stringify({ error: error.message }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500,
     })
   }
 })

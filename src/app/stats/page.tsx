@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { createAuthBrowserClient } from "@/lib/supabase-auth";
 
 interface Attendance {
   Email: string;
@@ -32,16 +33,15 @@ export default function StatsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
+      const supabase = createAuthBrowserClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      const email = user?.email || '';
       const [attendanceRes, resultsRes, configRes] = await Promise.all([
-        fetch("/api/attendance?email=allofdaniel1@gmail.com"),
-        fetch("/api/results?email=allofdaniel1@gmail.com"),
+        fetch(`/api/attendance?email=${encodeURIComponent(email)}`),
+        fetch(`/api/results?email=${encodeURIComponent(email)}`),
         fetch("/api/config"),
       ]);
 
@@ -62,7 +62,9 @@ export default function StatsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   // Calculate streak
   const calculateStreak = () => {

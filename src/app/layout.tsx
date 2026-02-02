@@ -3,6 +3,7 @@ import { Space_Grotesk } from 'next/font/google'
 import './globals.css'
 import Navigation from '@/components/Navigation'
 import { ServiceWorkerRegister } from '@/components/ServiceWorkerRegister'
+import { createAuthServerClient } from '@/lib/supabase-auth-server'
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],
@@ -32,17 +33,20 @@ export const viewport: Viewport = {
   userScalable: false,
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const supabase = await createAuthServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
   return (
     <html lang="ko">
       <body className={`${spaceGrotesk.variable} bg-black text-zinc-100 grain`}>
-        <Navigation />
-        <main className="pb-20 md:pb-0 md:pl-60">
-          <div className="mx-auto max-w-6xl px-5 py-6 md:py-8">
+        {user && <Navigation userEmail={user.email || ''} userName={user.user_metadata?.name || '학습자'} />}
+        <main className={user ? 'pb-20 md:pb-0 md:pl-64' : ''}>
+          <div className={user ? 'mx-auto max-w-6xl px-5 py-6 md:py-8' : ''}>
             {children}
           </div>
         </main>

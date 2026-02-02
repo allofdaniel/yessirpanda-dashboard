@@ -5,6 +5,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const DASHBOARD_URL = 'https://dashboard-keprojects.vercel.app'
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -92,17 +94,17 @@ ${wordList}
 
       if (geminiText) {
         const formattedText = geminiText
-          .replace(/\[(.+?)\]/g, '<h3 style="color:#a78bfa;font-size:14px;margin:16px 0 8px;">$1</h3>')
+          .replace(/\[(.+?)\]/g, '<h3 style="color:#a78bfa;font-size:13px;margin:10px 0 6px;">$1</h3>')
           .replace(/\n- /g, '<br>• ')
-          .replace(/\n\n/g, '<div style="height:8px;"></div>')
+          .replace(/\n\n/g, '<div style="height:6px;"></div>')
           .replace(/\n/g, '<br>')
 
         geminiSection = `
-          <div style="background-color:#18181b;border:1px solid #8b5cf640;border-radius:12px;overflow:hidden;margin-bottom:20px;">
-            <div style="padding:14px 16px;border-bottom:1px solid #27272a;background:linear-gradient(135deg,#8b5cf620,#7c3aed20);">
-              <h2 style="color:#a78bfa;font-size:15px;margin:0;">🤖 AI 복습 자료</h2>
+          <div style="background:#18181b;border:1px solid #8b5cf640;border-radius:10px;overflow:hidden;margin-bottom:12px;">
+            <div style="padding:10px 14px;border-bottom:1px solid #27272a;background:linear-gradient(135deg,#8b5cf620,#7c3aed20);">
+              <h2 style="color:#a78bfa;font-size:14px;margin:0;">🤖 AI 복습 자료</h2>
             </div>
-            <div style="padding:16px;color:#e2e8f0;font-size:14px;line-height:1.6;">
+            <div style="padding:12px 14px;color:#e2e8f0;font-size:13px;line-height:1.5;">
               ${formattedText}
             </div>
           </div>
@@ -110,13 +112,28 @@ ${wordList}
       }
     } catch (geminiError) {
       console.error('Gemini API error:', geminiError)
-      // Continue without Gemini content
     }
 
-    // For each subscriber, get their wrong words
+    const today = new Date().toISOString().slice(0, 10)
+
+    // For each subscriber, check lunch completion and build personalized email
     const results = []
+    let allCompleted = true
+
     for (const sub of subscribers) {
-      // Get wrong words for this subscriber (not mastered)
+      // Check if this subscriber clicked "학습 완료" today
+      const { data: lunchAttendance } = await supabase
+        .from('attendance')
+        .select('id')
+        .eq('email', sub.email)
+        .eq('type', 'lunch')
+        .eq('date', today)
+        .limit(1)
+
+      const completedLunch = lunchAttendance && lunchAttendance.length > 0
+      if (!completedLunch) allCompleted = false
+
+      // Get wrong words for this subscriber
       const { data: wrongWords } = await supabase
         .from('wrong_words')
         .select('word, meaning, wrong_count')
@@ -125,22 +142,45 @@ ${wordList}
         .order('wrong_count', { ascending: false })
         .limit(20)
 
+      // Build quiz status section
+      let quizStatusSection = ''
+      if (completedLunch) {
+        quizStatusSection = `
+          <div style="background:#18181b;border:1px solid #065f46;border-radius:10px;padding:14px;margin-bottom:12px;text-align:center;">
+            <div style="font-size:24px;margin-bottom:4px;">✅</div>
+            <p style="color:#10b981;font-size:14px;font-weight:600;margin:0;">오늘 학습 완료!</p>
+          </div>
+        `
+      } else {
+        const completeLink = `${DASHBOARD_URL}/api/complete?email=${encodeURIComponent(sub.email)}&day=${currentDay}`
+        quizStatusSection = `
+          <div style="background:#18181b;border:1px solid #f59e0b;border-radius:10px;padding:14px;margin-bottom:12px;text-align:center;">
+            <div style="font-size:24px;margin-bottom:4px;">⚠️</div>
+            <p style="color:#f59e0b;font-size:14px;font-weight:600;margin:0 0 4px;">아직 학습 완료를 안 하셨어요!</p>
+            <p style="color:#a1a1aa;font-size:12px;margin:0 0 8px;">완료 버튼을 눌러야 다음 Day로 진행됩니다</p>
+            <a href="${completeLink}" style="display:inline-block;background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;text-decoration:none;padding:8px 24px;border-radius:8px;font-size:13px;font-weight:700;">
+              학습 완료하기
+            </a>
+          </div>
+        `
+      }
+
       // Build wrong words section
       let wrongSection = ''
       if (wrongWords && wrongWords.length > 0) {
         const wrongRows = wrongWords.map((w: { word: string; meaning: string; wrong_count: number }, i: number) => `
           <tr>
-            <td style="padding:10px 8px;color:#a1a1aa;font-size:13px;border-bottom:1px solid #27272a;text-align:center;">${i + 1}</td>
-            <td style="padding:10px;color:#f87171;font-size:14px;font-weight:600;border-bottom:1px solid #27272a;">${w.word}</td>
-            <td style="padding:10px;color:#a1a1aa;font-size:13px;border-bottom:1px solid #27272a;">${w.meaning}</td>
-            <td style="padding:10px 8px;color:#f59e0b;font-size:12px;border-bottom:1px solid #27272a;text-align:center;">${w.wrong_count}회</td>
+            <td style="padding:6px;color:#a1a1aa;font-size:12px;border-bottom:1px solid #27272a;text-align:center;">${i + 1}</td>
+            <td style="padding:6px 8px;color:#f87171;font-size:13px;font-weight:600;border-bottom:1px solid #27272a;">${w.word}</td>
+            <td style="padding:6px 8px;color:#a1a1aa;font-size:12px;border-bottom:1px solid #27272a;">${w.meaning}</td>
+            <td style="padding:6px;color:#f59e0b;font-size:11px;border-bottom:1px solid #27272a;text-align:center;">${w.wrong_count}회</td>
           </tr>
         `).join('')
 
         wrongSection = `
-          <div style="background-color:#18181b;border:1px solid #dc2626;border-radius:12px;overflow:hidden;margin-bottom:20px;">
-            <div style="padding:14px 16px;border-bottom:1px solid #27272a;background-color:#7f1d1d20;">
-              <h2 style="color:#f87171;font-size:15px;margin:0;">❌ 오답 노트 (${wrongWords.length}개)</h2>
+          <div style="background:#18181b;border:1px solid #dc2626;border-radius:10px;overflow:hidden;margin-bottom:12px;">
+            <div style="padding:10px 14px;border-bottom:1px solid #27272a;background:#7f1d1d20;">
+              <h2 style="color:#f87171;font-size:14px;margin:0;">❌ 오답 노트 (${wrongWords.length}개)</h2>
             </div>
             <table style="width:100%;border-collapse:collapse;">
               ${wrongRows}
@@ -149,10 +189,10 @@ ${wordList}
         `
       } else {
         wrongSection = `
-          <div style="background-color:#18181b;border:1px solid #27272a;border-radius:12px;padding:20px;margin-bottom:20px;text-align:center;">
-            <div style="font-size:32px;margin-bottom:8px;">🎉</div>
-            <p style="color:#10b981;font-size:15px;font-weight:600;margin:0 0 4px;">오답이 없습니다!</p>
-            <p style="color:#71717a;font-size:13px;margin:0;">모든 단어를 완벽하게 학습하셨네요</p>
+          <div style="background:#18181b;border:1px solid #27272a;border-radius:10px;padding:14px;margin-bottom:12px;text-align:center;">
+            <div style="font-size:24px;margin-bottom:4px;">🎉</div>
+            <p style="color:#10b981;font-size:14px;font-weight:600;margin:0 0 2px;">오답이 없습니다!</p>
+            <p style="color:#71717a;font-size:12px;margin:0;">모든 단어를 완벽하게 학습하셨네요</p>
           </div>
         `
       }
@@ -160,9 +200,9 @@ ${wordList}
       // Build today's words review
       const wordRows = words.map((w: { word: string; meaning: string }, i: number) => `
         <tr>
-          <td style="padding:10px 8px;color:#a1a1aa;font-size:13px;border-bottom:1px solid #27272a;text-align:center;">${i + 1}</td>
-          <td style="padding:10px;color:#f4f4f5;font-size:14px;font-weight:600;border-bottom:1px solid #27272a;">${w.word}</td>
-          <td style="padding:10px;color:#a1a1aa;font-size:13px;border-bottom:1px solid #27272a;">${w.meaning}</td>
+          <td style="padding:6px;color:#a1a1aa;font-size:12px;border-bottom:1px solid #27272a;text-align:center;">${i + 1}</td>
+          <td style="padding:6px 8px;color:#f4f4f5;font-size:13px;font-weight:600;border-bottom:1px solid #27272a;">${w.word}</td>
+          <td style="padding:6px 8px;color:#a1a1aa;font-size:12px;border-bottom:1px solid #27272a;">${w.meaning}</td>
         </tr>
       `).join('')
 
@@ -173,38 +213,40 @@ ${wordList}
       const html = `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background-color:#09090b;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <div style="max-width:480px;margin:0 auto;padding:24px 16px;">
+<body style="margin:0;padding:0;background:#09090b;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <div style="max-width:480px;margin:0 auto;padding:16px 12px;">
     <!-- Header -->
-    <div style="text-align:center;padding:24px 0;">
-      <div style="font-size:40px;margin-bottom:8px;">🐼</div>
-      <h1 style="color:#f4f4f5;font-size:22px;margin:0 0 4px;">옛설판다</h1>
-      <p style="color:#71717a;font-size:13px;margin:0;">비즈니스 영어 마스터</p>
+    <div style="text-align:center;padding:12px 0;">
+      <div style="font-size:32px;margin-bottom:4px;">🐼</div>
+      <h1 style="color:#f4f4f5;font-size:18px;margin:0 0 2px;">옛설판다</h1>
+      <p style="color:#71717a;font-size:12px;margin:0;">비즈니스 영어 마스터</p>
     </div>
 
     <!-- Day Badge -->
-    <div style="text-align:center;margin-bottom:20px;">
-      <span style="display:inline-block;background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;padding:6px 16px;border-radius:20px;font-size:13px;font-weight:700;">
+    <div style="text-align:center;margin-bottom:12px;">
+      <span style="display:inline-block;background:linear-gradient(135deg,#8b5cf6,#7c3aed);color:#fff;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:700;">
         🌙 Day ${currentDay} 저녁 복습
       </span>
     </div>
 
     <!-- Greeting -->
-    <div style="background-color:#18181b;border:1px solid #27272a;border-radius:12px;padding:20px;margin-bottom:20px;">
-      <p style="color:#f4f4f5;font-size:15px;margin:0 0 8px;">수고하셨습니다, <strong>${sub.name || '학습자'}</strong>님! 🎊</p>
-      <p style="color:#a1a1aa;font-size:14px;margin:0;line-height:1.5;">
-        Day ${currentDay} 학습을 완료하셨습니다.<br>
-        오늘 배운 내용을 마지막으로 정리해보세요.
+    <div style="background:#18181b;border:1px solid #27272a;border-radius:10px;padding:12px 14px;margin-bottom:12px;">
+      <p style="color:#f4f4f5;font-size:14px;margin:0 0 4px;">${sub.name || '학습자'}님, 수고하셨습니다! 🎊</p>
+      <p style="color:#a1a1aa;font-size:13px;margin:0;line-height:1.4;">
+        Day ${currentDay} 저녁 복습입니다. 오늘 배운 내용을 정리해보세요.
       </p>
     </div>
+
+    <!-- Quiz Status -->
+    ${quizStatusSection}
 
     <!-- Wrong Words Section -->
     ${wrongSection}
 
     <!-- Today's Full Review -->
-    <div style="background-color:#18181b;border:1px solid #27272a;border-radius:12px;overflow:hidden;margin-bottom:20px;">
-      <div style="padding:14px 16px;border-bottom:1px solid #27272a;">
-        <h2 style="color:#f4f4f5;font-size:15px;margin:0;">📖 오늘의 전체 단어 복습</h2>
+    <div style="background:#18181b;border:1px solid #27272a;border-radius:10px;overflow:hidden;margin-bottom:12px;">
+      <div style="padding:10px 14px;border-bottom:1px solid #27272a;">
+        <h2 style="color:#f4f4f5;font-size:14px;margin:0;">📖 오늘의 전체 단어</h2>
       </div>
       <table style="width:100%;border-collapse:collapse;">
         ${wordRows}
@@ -215,36 +257,41 @@ ${wordList}
     ${geminiSection}
 
     <!-- Progress Bar -->
-    <div style="background-color:#18181b;border:1px solid #27272a;border-radius:12px;padding:20px;margin-bottom:20px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <span style="color:#f4f4f5;font-size:14px;font-weight:600;">📊 전체 진도</span>
-        <span style="color:#8b5cf6;font-size:14px;font-weight:700;">${progressPercent}%</span>
+    <div style="background:#18181b;border:1px solid #27272a;border-radius:10px;padding:14px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <span style="color:#f4f4f5;font-size:13px;font-weight:600;">📊 전체 진도</span>
+        <span style="color:#8b5cf6;font-size:13px;font-weight:700;">${progressPercent}%</span>
       </div>
-      <div style="background-color:#27272a;border-radius:8px;height:8px;overflow:hidden;">
-        <div style="background:linear-gradient(90deg,#8b5cf6,#a78bfa);height:100%;width:${progressPercent}%;border-radius:8px;"></div>
+      <div style="background:#27272a;border-radius:6px;height:6px;overflow:hidden;">
+        <div style="background:linear-gradient(90deg,#8b5cf6,#a78bfa);height:100%;width:${progressPercent}%;border-radius:6px;"></div>
       </div>
-      <p style="color:#71717a;font-size:12px;margin:8px 0 0;text-align:center;">
-        Day ${currentDay} / ${totalDays} 완료
+      <p style="color:#71717a;font-size:11px;margin:4px 0 0;text-align:center;">
+        Day ${currentDay} / ${totalDays}
       </p>
     </div>
 
     <!-- Tomorrow Preview -->
     ${nextDay <= totalDays ? `
-    <div style="background-color:#18181b;border:1px solid #27272a;border-radius:12px;padding:20px;text-align:center;">
-      <p style="color:#f4f4f5;font-size:14px;margin:0 0 4px;">내일은 <strong style="color:#f59e0b;">Day ${nextDay}</strong>입니다</p>
-      <p style="color:#71717a;font-size:13px;margin:0;">새로운 단어와 함께 내일 아침에 만나요! 🌅</p>
+    <div style="background:#18181b;border:1px solid #27272a;border-radius:10px;padding:14px;text-align:center;">
+      <p style="color:#f4f4f5;font-size:13px;margin:0 0 2px;">내일은 <strong style="color:#f59e0b;">Day ${nextDay}</strong>입니다</p>
+      <p style="color:#71717a;font-size:12px;margin:0;">내일 아침에 만나요! 🌅</p>
     </div>
     ` : `
-    <div style="background-color:#18181b;border:1px solid #f59e0b;border-radius:12px;padding:20px;text-align:center;">
-      <div style="font-size:32px;margin-bottom:8px;">🏆</div>
-      <p style="color:#f59e0b;font-size:16px;font-weight:700;margin:0 0 4px;">축하합니다!</p>
-      <p style="color:#a1a1aa;font-size:13px;margin:0;">모든 학습 과정을 완료하셨습니다!</p>
+    <div style="background:#18181b;border:1px solid #f59e0b;border-radius:10px;padding:14px;text-align:center;">
+      <div style="font-size:24px;margin-bottom:4px;">🏆</div>
+      <p style="color:#f59e0b;font-size:15px;font-weight:700;margin:0 0 2px;">축하합니다!</p>
+      <p style="color:#a1a1aa;font-size:12px;margin:0;">모든 학습 과정을 완료하셨습니다!</p>
     </div>
     `}
 
+    <!-- Dashboard Link -->
+    <div style="text-align:center;margin:12px 0;">
+      <a href="${DASHBOARD_URL}/login" style="display:inline-block;background:#8B5CF6;color:#fff;text-decoration:none;padding:10px 28px;border-radius:8px;font-size:13px;font-weight:600;">📊 내 학습 관리</a>
+    </div>
+
     <!-- Footer -->
-    <div style="text-align:center;padding:16px 0;">
-      <p style="color:#52525b;font-size:12px;margin:0;">옛설판다 · 매일 성장하는 비즈니스 영어</p>
+    <div style="text-align:center;padding:8px 0;">
+      <p style="color:#52525b;font-size:11px;margin:0;">옛설판다 · 매일 성장하는 비즈니스 영어</p>
     </div>
   </div>
 </body>
@@ -270,19 +317,20 @@ ${wordList}
         email: sub.email,
         status: res.status,
         id: resBody.id || null,
+        completedLunch,
         wrongCount: wrongWords?.length || 0,
       })
 
       // Record attendance
       await supabase.from('attendance').upsert(
-        { email: sub.email, date: new Date().toISOString().slice(0, 10), type: 'evening', completed: true },
+        { email: sub.email, date: today, type: 'evening', completed: true },
         { onConflict: 'email,date,type' }
       )
     }
 
-    // Auto-advance day after evening review
+    // Only advance day if ALL subscribers completed the quiz
     const nextDay = currentDay + 1
-    if (nextDay <= totalDays) {
+    if (allCompleted && nextDay <= totalDays) {
       await supabase.from('config').upsert(
         { key: 'CurrentDay', value: nextDay.toString(), updated_at: new Date().toISOString() },
         { onConflict: 'key' }
@@ -292,7 +340,8 @@ ${wordList}
     return new Response(JSON.stringify({
       success: true,
       day: currentDay,
-      nextDay: nextDay <= totalDays ? nextDay : null,
+      nextDay: allCompleted && nextDay <= totalDays ? nextDay : null,
+      dayAdvanced: allCompleted,
       sent: results.length,
       results,
     }), {

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { createAuthBrowserClient } from "@/lib/supabase-auth";
 
 interface WrongWord {
   Email: string;
@@ -20,15 +21,17 @@ export default function WrongPage() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterType>("전체");
   const [updatingWords, setUpdatingWords] = useState<Set<string>>(new Set());
+  const emailRef = useRef('');
 
-  useEffect(() => {
-    fetchWrongWords();
-  }, []);
-
-  const fetchWrongWords = async () => {
+  const fetchWrongWords = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch("/api/wrong?email=allofdaniel1@gmail.com");
+      if (!emailRef.current) {
+        const supabase = createAuthBrowserClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        emailRef.current = user?.email || '';
+      }
+      const response = await fetch(`/api/wrong?email=${encodeURIComponent(emailRef.current)}`);
       if (!response.ok) throw new Error("Failed to fetch wrong words");
       const data = await response.json();
       setWrongWords(data);
@@ -38,7 +41,9 @@ export default function WrongPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => { fetchWrongWords(); }, [fetchWrongWords]);
 
   const toggleMastered = async (word: string, currentMastered: boolean) => {
     setUpdatingWords((prev) => new Set(prev).add(word));
@@ -47,7 +52,7 @@ export default function WrongPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: "allofdaniel1@gmail.com",
+          email: emailRef.current,
           word,
           data: { Mastered: !currentMastered },
         }),

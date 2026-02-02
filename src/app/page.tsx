@@ -1,7 +1,8 @@
 ﻿'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
+import { createAuthBrowserClient } from '@/lib/supabase-auth';
 
 interface Config {
   CurrentDay: string;
@@ -33,17 +34,23 @@ export default function HomePage() {
   const [attendanceList, setAttendanceList] = useState<Attendance[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [userName, setUserName] = useState('학습자');
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
+      const supabase = createAuthBrowserClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      const email = user?.email || '';
+      setUserName(user?.user_metadata?.name || '학습자');
+
       const [configRes, wordsRes, wrongRes, attendanceRes] = await Promise.all([
         fetch('/api/config'),
         fetch('/api/words'),
-        fetch('/api/wrong?email=allofdaniel1@gmail.com'),
-        fetch('/api/attendance?email=allofdaniel1@gmail.com'),
+        fetch(`/api/wrong?email=${encodeURIComponent(email)}`),
+        fetch(`/api/attendance?email=${encodeURIComponent(email)}`),
       ]);
 
       if (!configRes.ok || !wordsRes.ok || !wrongRes.ok || !attendanceRes.ok) {
@@ -67,11 +74,11 @@ export default function HomePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   if (loading) {
     return (
@@ -134,7 +141,7 @@ export default function HomePage() {
             <h1 className="text-3xl md:text-4xl font-bold gradient-text mb-2">
               옛설판다 👋
             </h1>
-            <p className="text-xl text-zinc-400">Daniel님, 안녕하세요!</p>
+            <p className="text-xl text-zinc-400">{userName}님, 안녕하세요!</p>
           </div>
           <div className="inline-flex items-center gap-2 bg-black/30 backdrop-blur-sm px-5 py-2.5 rounded-full border border-violet-500/30">
             <span className="text-sm text-zinc-400">Day</span>

@@ -90,17 +90,17 @@ ${wordList}
         const formattedText = geminiText
           .replace(/━+/g, '')
           .replace(/\[(.+?)\]\s*-\s*(.+)/g, '<strong style="color:#f59e0b;">$1</strong> <span style="color:#a1a1aa;">- $2</span>')
-          .replace(/예문:\s*(.+)/g, '<div style="color:#e2e8f0;margin:4px 0;">📝 $1</div>')
-          .replace(/해석:\s*(.+)/g, '<div style="color:#94a3b8;font-size:13px;">💬 $1</div>')
-          .replace(/\n\n/g, '<div style="height:12px;"></div>')
+          .replace(/예문:\s*(.+)/g, '<div style="color:#e2e8f0;margin:2px 0;">📝 $1</div>')
+          .replace(/해석:\s*(.+)/g, '<div style="color:#94a3b8;font-size:12px;">💬 $1</div>')
+          .replace(/\n\n/g, '<div style="height:6px;"></div>')
           .replace(/\n/g, '<br>')
 
         geminiSection = `
-          <div style="background-color:#18181b;border:1px solid #f59e0b40;border-radius:12px;overflow:hidden;margin-bottom:20px;">
-            <div style="padding:14px 16px;border-bottom:1px solid #27272a;background:linear-gradient(135deg,#f59e0b20,#d9770620);">
-              <h2 style="color:#f59e0b;font-size:15px;margin:0;">🤖 AI 비즈니스 예문</h2>
+          <div style="background:#18181b;border:1px solid #f59e0b40;border-radius:10px;overflow:hidden;margin-bottom:12px;">
+            <div style="padding:10px 14px;border-bottom:1px solid #27272a;background:linear-gradient(135deg,#f59e0b20,#d9770620);">
+              <h2 style="color:#f59e0b;font-size:14px;margin:0;">🤖 AI 비즈니스 예문</h2>
             </div>
-            <div style="padding:16px;color:#e2e8f0;font-size:14px;line-height:1.6;">
+            <div style="padding:12px 14px;color:#e2e8f0;font-size:13px;line-height:1.5;">
               ${formattedText}
             </div>
           </div>
@@ -108,50 +108,48 @@ ${wordList}
       }
     } catch (geminiError) {
       console.error('Gemini API error:', geminiError)
-      // Continue without Gemini content
     }
 
     // Build word list HTML
     const wordRows = words.map((w: { word: string; meaning: string }, i: number) => `
       <tr>
-        <td style="padding:12px 8px;color:#a1a1aa;font-size:14px;border-bottom:1px solid #27272a;width:30px;text-align:center;">${i + 1}</td>
-        <td style="padding:12px 10px;color:#f4f4f5;font-size:16px;font-weight:600;border-bottom:1px solid #27272a;">${w.word}</td>
-        <td style="padding:12px 10px;color:#a1a1aa;font-size:14px;border-bottom:1px solid #27272a;">${w.meaning}</td>
+        <td style="padding:8px 6px;color:#a1a1aa;font-size:12px;border-bottom:1px solid #27272a;text-align:center;">${i + 1}</td>
+        <td style="padding:8px;color:#f4f4f5;font-size:14px;font-weight:600;border-bottom:1px solid #27272a;">${w.word}</td>
+        <td style="padding:8px;color:#a1a1aa;font-size:13px;border-bottom:1px solid #27272a;">${w.meaning}</td>
       </tr>
     `).join('')
 
     const buildHtml = (name: string) => `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background-color:#09090b;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-  <div style="max-width:480px;margin:0 auto;padding:24px 16px;">
+<body style="margin:0;padding:0;background:#09090b;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <div style="max-width:480px;margin:0 auto;padding:16px 12px;">
     <!-- Header -->
-    <div style="text-align:center;padding:24px 0;">
-      <div style="font-size:40px;margin-bottom:8px;">🐼</div>
-      <h1 style="color:#f4f4f5;font-size:22px;margin:0 0 4px;">옛설판다</h1>
-      <p style="color:#71717a;font-size:13px;margin:0;">비즈니스 영어 마스터</p>
+    <div style="text-align:center;padding:12px 0;">
+      <div style="font-size:32px;margin-bottom:4px;">🐼</div>
+      <h1 style="color:#f4f4f5;font-size:18px;margin:0 0 2px;">옛설판다</h1>
+      <p style="color:#71717a;font-size:12px;margin:0;">비즈니스 영어 마스터</p>
     </div>
 
     <!-- Day Badge -->
-    <div style="text-align:center;margin-bottom:20px;">
-      <span style="display:inline-block;background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:6px 16px;border-radius:20px;font-size:13px;font-weight:700;">
+    <div style="text-align:center;margin-bottom:12px;">
+      <span style="display:inline-block;background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:700;">
         🌅 Day ${currentDay} / ${totalDays}
       </span>
     </div>
 
     <!-- Greeting -->
-    <div style="background-color:#18181b;border:1px solid #27272a;border-radius:12px;padding:20px;margin-bottom:20px;">
-      <p style="color:#f4f4f5;font-size:15px;margin:0 0 8px;">안녕하세요, <strong>${name}</strong>님!</p>
-      <p style="color:#a1a1aa;font-size:14px;margin:0;line-height:1.5;">
+    <div style="background:#18181b;border:1px solid #27272a;border-radius:10px;padding:12px 14px;margin-bottom:12px;">
+      <p style="color:#f4f4f5;font-size:14px;margin:0 0 4px;">안녕하세요, <strong>${name}</strong>님!</p>
+      <p style="color:#a1a1aa;font-size:13px;margin:0;line-height:1.4;">
         오늘의 비즈니스 영어 단어 <strong style="color:#f59e0b;">${words.length}개</strong>를 준비했습니다.
-        각 단어를 소리 내어 읽으며 뜻을 익혀보세요.
       </p>
     </div>
 
     <!-- Word Table -->
-    <div style="background-color:#18181b;border:1px solid #27272a;border-radius:12px;overflow:hidden;margin-bottom:20px;">
-      <div style="padding:14px 16px;border-bottom:1px solid #27272a;">
-        <h2 style="color:#f4f4f5;font-size:15px;margin:0;">📚 오늘의 단어</h2>
+    <div style="background:#18181b;border:1px solid #27272a;border-radius:10px;overflow:hidden;margin-bottom:12px;">
+      <div style="padding:10px 14px;border-bottom:1px solid #27272a;">
+        <h2 style="color:#f4f4f5;font-size:14px;margin:0;">📚 오늘의 단어</h2>
       </div>
       <table style="width:100%;border-collapse:collapse;">
         ${wordRows}
@@ -162,18 +160,22 @@ ${wordList}
     ${geminiSection}
 
     <!-- Tips -->
-    <div style="background-color:#18181b;border:1px solid #27272a;border-radius:12px;padding:20px;margin-bottom:20px;">
-      <h3 style="color:#f4f4f5;font-size:14px;margin:0 0 10px;">💡 학습 팁</h3>
-      <ul style="color:#a1a1aa;font-size:13px;margin:0;padding-left:18px;line-height:1.8;">
+    <div style="background:#18181b;border:1px solid #27272a;border-radius:10px;padding:12px 14px;margin-bottom:12px;">
+      <h3 style="color:#f4f4f5;font-size:13px;margin:0 0 6px;">💡 학습 팁</h3>
+      <ul style="color:#a1a1aa;font-size:12px;margin:0;padding-left:16px;line-height:1.6;">
         <li>단어를 3번씩 소리 내어 읽어보세요</li>
-        <li>각 단어로 간단한 문장을 만들어보세요</li>
-        <li>잠시 후 테스트가 발송됩니다</li>
+        <li>잠시 후 점심 테스트가 발송됩니다</li>
       </ul>
     </div>
 
+    <!-- Dashboard Link -->
+    <div style="text-align:center;margin:12px 0;">
+      <a href="https://dashboard-keprojects.vercel.app/login" style="display:inline-block;background:#8B5CF6;color:#fff;text-decoration:none;padding:10px 28px;border-radius:8px;font-size:13px;font-weight:600;">📊 내 학습 관리</a>
+    </div>
+
     <!-- Footer -->
-    <div style="text-align:center;padding:16px 0;">
-      <p style="color:#52525b;font-size:12px;margin:0;">옛설판다 · 매일 성장하는 비즈니스 영어</p>
+    <div style="text-align:center;padding:8px 0;">
+      <p style="color:#52525b;font-size:11px;margin:0;">옛설판다 · 매일 성장하는 비즈니스 영어</p>
     </div>
   </div>
 </body>
