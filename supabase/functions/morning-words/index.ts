@@ -119,7 +119,7 @@ ${wordList}
       </tr>
     `).join('')
 
-    const buildHtml = (name: string) => `<!DOCTYPE html>
+    const buildHtml = (name: string, email: string) => `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
 <body style="margin:0;padding:0;background:#09090b;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
@@ -168,9 +168,10 @@ ${wordList}
       </ul>
     </div>
 
-    <!-- Dashboard Link -->
+    <!-- Action Buttons -->
     <div style="text-align:center;margin:12px 0;">
-      <a href="https://dashboard-keprojects.vercel.app/login" style="display:inline-block;background:#8B5CF6;color:#fff;text-decoration:none;padding:10px 28px;border-radius:8px;font-size:13px;font-weight:600;">📊 내 학습 관리</a>
+      <a href="https://dashboard-keprojects.vercel.app/login" style="display:inline-block;background:#8B5CF6;color:#fff;text-decoration:none;padding:10px 28px;border-radius:8px;font-size:13px;font-weight:600;margin-right:8px;">📊 내 학습 관리</a>
+      <a href="https://dashboard-keprojects.vercel.app/postpone?email=${encodeURIComponent(email)}&day=${currentDay}" style="display:inline-block;background:#27272a;color:#a1a1aa;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:500;border:1px solid #3f3f46;">⏰ 내일로 미루기</a>
     </div>
 
     <!-- Footer -->
@@ -194,7 +195,7 @@ ${wordList}
           from: '옛설판다 <onboarding@resend.dev>',
           to: [sub.email],
           subject: `🌅 Day ${currentDay} - 오늘의 비즈니스 영어 (${words.length}개)`,
-          html: buildHtml(sub.name || '학습자'),
+          html: buildHtml(sub.name || '학습자', sub.email),
         }),
       })
 
