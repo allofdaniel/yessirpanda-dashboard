@@ -56,12 +56,14 @@ export async function GET(request: Request) {
           })
         } else {
           // Update channels array
-          await supabase.rpc('add_channel_to_subscriber', {
-            subscriber_email: email,
-            new_channel: provider,
-          }).catch(() => {
+          try {
+            await supabase.rpc('add_channel_to_subscriber', {
+              subscriber_email: email,
+              new_channel: provider,
+            })
+          } catch {
             // If RPC doesn't exist, just skip
-          })
+          }
         }
 
         // If Kakao login, link to kakao_users for chatbot
