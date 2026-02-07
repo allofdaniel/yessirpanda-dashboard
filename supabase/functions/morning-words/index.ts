@@ -15,6 +15,8 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const resendKey = Deno.env.get('RESEND_API_KEY')!
     const geminiKey = Deno.env.get('GEMINI_API_KEY')!
+    const dashboardUrl = Deno.env.get('DASHBOARD_URL') || 'https://dashboard-keprojects.vercel.app'
+    const emailFrom = Deno.env.get('EMAIL_FROM') || 'onboarding@resend.dev'
 
     const supabase = createClient(supabaseUrl, supabaseKey)
 
@@ -121,12 +123,12 @@ ${wordList}
 
     const buildHtml = (name: string, email: string) => `<!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background:#09090b;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="x-apple-disable-message-reformatting"><meta http-equiv="X-UA-Compatible" content="IE=edge"></head>
+<body style="margin:0;padding:0;background:#09090b;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
   <div style="max-width:480px;margin:0 auto;padding:16px 12px;">
     <!-- Header -->
     <div style="text-align:center;padding:12px 0;">
-      <div style="font-size:32px;margin-bottom:4px;">🐼</div>
+      <div style="font-size:32px;margin-bottom:4px;" role="img" aria-label="Panda mascot for Ye Ssil Panda">🐼</div>
       <h1 style="color:#f4f4f5;font-size:18px;margin:0 0 2px;">옛설판다</h1>
       <p style="color:#71717a;font-size:12px;margin:0;">비즈니스 영어 마스터</p>
     </div>
@@ -134,7 +136,7 @@ ${wordList}
     <!-- Day Badge -->
     <div style="text-align:center;margin-bottom:12px;">
       <span style="display:inline-block;background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:700;">
-        🌅 Day ${currentDay} / ${totalDays}
+        <span role="img" aria-label="Sunrise">🌅</span> Day ${currentDay} / ${totalDays}
       </span>
     </div>
 
@@ -149,9 +151,9 @@ ${wordList}
     <!-- Word Table -->
     <div style="background:#18181b;border:1px solid #27272a;border-radius:10px;overflow:hidden;margin-bottom:12px;">
       <div style="padding:10px 14px;border-bottom:1px solid #27272a;">
-        <h2 style="color:#f4f4f5;font-size:14px;margin:0;">📚 오늘의 단어</h2>
+        <h2 style="color:#f4f4f5;font-size:14px;margin:0;"><span role="img" aria-label="Books">📚</span> 오늘의 단어</h2>
       </div>
-      <table style="width:100%;border-collapse:collapse;">
+      <table style="width:100%;border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">
         ${wordRows}
       </table>
     </div>
@@ -161,7 +163,7 @@ ${wordList}
 
     <!-- Tips -->
     <div style="background:#18181b;border:1px solid #27272a;border-radius:10px;padding:12px 14px;margin-bottom:12px;">
-      <h3 style="color:#f4f4f5;font-size:13px;margin:0 0 6px;">💡 학습 팁</h3>
+      <h3 style="color:#f4f4f5;font-size:13px;margin:0 0 6px;"><span role="img" aria-label="Light bulb">💡</span> 학습 팁</h3>
       <ul style="color:#a1a1aa;font-size:12px;margin:0;padding-left:16px;line-height:1.6;">
         <li>단어를 3번씩 소리 내어 읽어보세요</li>
         <li>잠시 후 점심 테스트가 발송됩니다</li>
@@ -169,9 +171,13 @@ ${wordList}
     </div>
 
     <!-- Action Buttons -->
-    <div style="text-align:center;margin:12px 0;">
-      <a href="https://dashboard-keprojects.vercel.app/login" style="display:inline-block;background:#8B5CF6;color:#fff;text-decoration:none;padding:10px 28px;border-radius:8px;font-size:13px;font-weight:600;margin-right:8px;">📊 내 학습 관리</a>
-      <a href="https://dashboard-keprojects.vercel.app/postpone?email=${encodeURIComponent(email)}&day=${currentDay}" style="display:inline-block;background:#27272a;color:#a1a1aa;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:500;border:1px solid #3f3f46;">⏰ 내일로 미루기</a>
+    <div style="text-align:center;margin:12px 0;mso-margin-bottom:12px;mso-margin-top:12px;">
+      <a href="${dashboardUrl}/login" style="display:inline-block;background:#8B5CF6;color:#fff;text-decoration:none;padding:10px 28px;border-radius:8px;font-size:13px;font-weight:600;margin-right:8px;margin-bottom:8px;border:2px solid #8B5CF6;mso-padding-alt:10px 28px;">
+        <span role="img" aria-label="Dashboard">📊</span> 내 학습 관리
+      </a>
+      <a href="${dashboardUrl}/postpone?email=${encodeURIComponent(email)}&day=${currentDay}" style="display:inline-block;background:#ec4899;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;border:2px solid #ec4899;mso-padding-alt:10px 20px;">
+        <span role="img" aria-label="Clock">⏰</span> 내일로 미루기
+      </a>
     </div>
 
     <!-- Footer -->
@@ -192,7 +198,7 @@ ${wordList}
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: '옛설판다 <onboarding@resend.dev>',
+          from: `옛설판다 <${emailFrom}>`,
           to: [sub.email],
           subject: `🌅 Day ${currentDay} - 오늘의 비즈니스 영어 (${words.length}개)`,
           html: buildHtml(sub.name || '학습자', sub.email),
