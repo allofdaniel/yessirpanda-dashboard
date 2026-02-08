@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-
+import { createAuthBrowserClient } from '@/lib/supabase-auth';
+import ExportButtons from '@/components/ExportButtons';
 
 interface Word {
   Day: number;
@@ -18,11 +19,18 @@ export default function WordsPage() {
   const [expandedWordIndex, setExpandedWordIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string>('');
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
+
+        // Get user email
+        const supabase = createAuthBrowserClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        setUserEmail(user?.email || '');
+
         const [wordsRes, configRes] = await Promise.all([
           fetch('/api/words'),
           fetch('/api/config'),
@@ -122,13 +130,27 @@ export default function WordsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-2 animate-fade-in">
-        <h1 className="text-3xl font-bold text-zinc-100">
-          📚 단어장
-        </h1>
-        <p className="text-zinc-400">
-          {selectedDay === null ? `전체 ${filteredWords.length}개의 단어` : `Day ${selectedDay} - ${filteredWords.length}개의 단어`}
-        </p>
+      <div className="space-y-4 animate-fade-in">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-zinc-100">
+              📚 단어장
+            </h1>
+            <p className="text-zinc-400">
+              {selectedDay === null ? `전체 ${filteredWords.length}개의 단어` : `Day ${selectedDay} - ${filteredWords.length}개의 단어`}
+            </p>
+          </div>
+          <div>
+            {userEmail && (
+              <ExportButtons
+                email={userEmail}
+                currentDay={selectedDay || undefined}
+                type={selectedDay === null ? 'all' : 'today'}
+                label={selectedDay === null ? '전체 단어' : `Day ${selectedDay} 단어`}
+              />
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="flex gap-2 overflow-x-auto no-scrollbar animate-fade-in stagger-1">

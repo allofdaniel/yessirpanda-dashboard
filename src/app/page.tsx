@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { createAuthBrowserClient } from '@/lib/supabase-auth';
+import ExportButtons from '@/components/ExportButtons';
 
 interface Config {
   CurrentDay: string;
@@ -40,6 +41,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userName, setUserName] = useState('학습자');
+  const [userEmail, setUserEmail] = useState<string>('');
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -49,6 +51,7 @@ export default function HomePage() {
       const supabase = createAuthBrowserClient();
       const { data: { user } } = await supabase.auth.getUser();
       const email = user?.email || '';
+      setUserEmail(email);
       setUserName(user?.user_metadata?.name || '학습자');
 
       const [configRes, wordsRes, wrongRes, attendanceRes, postponeRes] = await Promise.all([
@@ -341,10 +344,10 @@ export default function HomePage() {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-zinc-100">미룬 단어 복습</h2>
               <Link
-                href="/postpone"
+                href="/review"
                 className="text-violet-400 hover:text-violet-300 transition-colors duration-200 text-sm font-medium"
               >
-                학습 시작 →
+                복습 시작 →
               </Link>
             </div>
             <div className="space-y-3">
@@ -378,12 +381,20 @@ export default function HomePage() {
         <div className={`card card-glow p-6 ${postponedDays.length === 0 ? 'md:col-span-2' : ''}`}>
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold text-zinc-100">최근 오답 단어</h2>
-            <Link
-              href="/wrong"
-              className="text-violet-400 hover:text-violet-300 transition-colors duration-200 text-sm font-medium"
-            >
-              더 보기 →
-            </Link>
+            <div className="flex gap-3">
+              <Link
+                href="/review"
+                className="text-violet-400 hover:text-violet-300 transition-colors duration-200 text-sm font-medium"
+              >
+                복습 모드 →
+              </Link>
+              <Link
+                href="/wrong"
+                className="text-violet-400 hover:text-violet-300 transition-colors duration-200 text-sm font-medium"
+              >
+                더 보기 →
+              </Link>
+            </div>
           </div>
 
           {wrongWords.length === 0 ? (
@@ -411,6 +422,38 @@ export default function HomePage() {
           )}
         </div>
       </div>
+
+      {/* Export Section */}
+      {userEmail && (
+        <div className="card card-glow p-6 animate-fade-in stagger-5">
+          <h2 className="text-xl font-bold text-zinc-100 mb-4">단어 내보내기</h2>
+          <p className="text-zinc-400 mb-6 text-sm">학습한 단어를 PDF 또는 Excel 파일로 다운로드하세요.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="p-4 rounded-lg bg-zinc-900/50 border border-zinc-800">
+              <h3 className="text-zinc-100 font-semibold mb-2 text-sm">전체 단어</h3>
+              <p className="text-zinc-500 text-xs mb-3">모든 단어 목록</p>
+              <ExportButtons email={userEmail} type="all" label="전체 단어" className="flex-col" />
+            </div>
+            <div className="p-4 rounded-lg bg-zinc-900/50 border border-zinc-800">
+              <h3 className="text-zinc-100 font-semibold mb-2 text-sm">오늘의 단어</h3>
+              <p className="text-zinc-500 text-xs mb-3">Day {currentDay} 단어</p>
+              <ExportButtons email={userEmail} currentDay={currentDay} type="today" label="오늘 단어" className="flex-col" />
+            </div>
+            <div className="p-4 rounded-lg bg-zinc-900/50 border border-zinc-800">
+              <h3 className="text-zinc-100 font-semibold mb-2 text-sm">틀린 단어</h3>
+              <p className="text-zinc-500 text-xs mb-3">{wrongWords.length}개 오답</p>
+              <ExportButtons email={userEmail} type="wrong" label="틀린 단어" className="flex-col" />
+            </div>
+            {postponedDays.length > 0 && (
+              <div className="p-4 rounded-lg bg-zinc-900/50 border border-zinc-800">
+                <h3 className="text-zinc-100 font-semibold mb-2 text-sm">미룬 단어</h3>
+                <p className="text-zinc-500 text-xs mb-3">{postponedDays.length}일 미룸</p>
+                <ExportButtons email={userEmail} type="postponed" label="미룬 단어" className="flex-col" />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

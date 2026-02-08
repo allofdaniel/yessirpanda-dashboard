@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createAuthBrowserClient } from "@/lib/supabase-auth";
+import ExportButtons from "@/components/ExportButtons";
 
 interface WrongWord {
   Email: string;
@@ -107,13 +108,22 @@ export default function WrongPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="animate-fade-in">
-        <h1 className="text-3xl font-bold text-zinc-100 mb-2">
-          ❌ 오답 노트
-        </h1>
-        <p className="text-zinc-400">
-          총 {wrongWords.length}개 단어 | 마스터 {masteredCount}개
-        </p>
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 animate-fade-in">
+        <div>
+          <h1 className="text-3xl font-bold text-zinc-100 mb-2">
+            ❌ 오답 노트
+          </h1>
+          <p className="text-zinc-400">
+            총 {wrongWords.length}개 단어 | 마스터 {masteredCount}개
+          </p>
+        </div>
+        {emailRef.current && wrongWords.length > 0 && (
+          <ExportButtons
+            email={emailRef.current}
+            type="wrong"
+            label="오답 단어"
+          />
+        )}
       </div>
 
       {/* Filter Tabs */}

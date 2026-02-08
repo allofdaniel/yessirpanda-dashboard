@@ -2,6 +2,13 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createAuthBrowserClient } from '@/lib/supabase-auth'
+import {
+  isPushNotificationSupported,
+  subscribeToPushNotifications,
+  unsubscribeFromPushNotifications,
+  getSubscriptionStatus,
+  getNotificationPermission,
+} from '@/lib/push-notifications'
 
 interface Settings {
   words_per_day: number
@@ -23,6 +30,9 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState('')
   const [user, setUser] = useState<{ email: string; name: string } | null>(null)
+  const [pushEnabled, setPushEnabled] = useState(false)
+  const [pushSupported, setPushSupported] = useState(false)
+  const [togglingPush, setTogglingPush] = useState(false)
 
   const supabase = createAuthBrowserClient()
 
@@ -36,6 +46,14 @@ export default function SettingsPage() {
       const data = await res.json()
       if (data.settings) setSettings(data.settings)
     }
+
+    // Check push notification support and status
+    setPushSupported(isPushNotificationSupported())
+    if (isPushNotificationSupported()) {
+      const status = await getSubscriptionStatus(authUser.email || '')
+      setPushEnabled(status.enabled)
+    }
+
     setLoading(false)
   }, [supabase])
 
@@ -54,6 +72,41 @@ export default function SettingsPage() {
       setTimeout(() => setToast(''), 2000)
     }
     setSaving(false)
+  }
+
+  const handleTogglePush = async () => {
+    if (!user || togglingPush) return
+    setTogglingPush(true)
+
+    try {
+      if (pushEnabled) {
+        // Disable notifications
+        await unsubscribeFromPushNotifications(user.email)
+        setPushEnabled(false)
+        setToast('알림이 비활성화되었습니다')
+      } else {
+        // Check permission first
+        const permission = getNotificationPermission()
+        if (permission === 'denied') {
+          setToast('브라우저 알림 권한이 차단되었습니다. 브라우저 설정에서 권한을 허용해주세요.')
+          setTimeout(() => setToast(''), 4000)
+          setTogglingPush(false)
+          return
+        }
+
+        // Enable notifications
+        await subscribeToPushNotifications(user.email)
+        setPushEnabled(true)
+        setToast('알림이 활성화되었습니다!')
+      }
+      setTimeout(() => setToast(''), 2000)
+    } catch (error) {
+      console.error('Error toggling push notifications:', error)
+      setToast(error instanceof Error ? error.message : '알림 설정 중 오류가 발생했습니다')
+      setTimeout(() => setToast(''), 3000)
+    } finally {
+      setTogglingPush(false)
+    }
   }
 
   if (loading) {
@@ -120,6 +173,55 @@ export default function SettingsPage() {
             />
           </div>
         ))}
+      </div>
+
+      {/* Push Notifications */}
+      <div className="card p-6 space-y-5">
+        <h2 className="text-lg font-bold text-white flex items-center gap-2">
+          <span className="text-violet-400">🔔</span> 알림 설정
+        </h2>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between p-4 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+            <div className="flex-1">
+              <p className="text-sm font-medium text-white">푸시 알림 받기</p>
+              <p className="text-xs text-zinc-500 mt-1">학습 리마인더와 출석 축하 알림을 받습니다</p>
+              {!pushSupported && (
+                <p className="text-xs text-amber-400 mt-1">이 브라우저는 푸시 알림을 지원하지 않습니다</p>
+              )}
+            </div>
+            <button
+              onClick={handleTogglePush}
+              disabled={!pushSupported || togglingPush}
+              className={`relative w-14 h-8 rounded-full transition-all disabled:opacity-30 disabled:cursor-not-allowed ${
+                pushEnabled ? 'bg-emerald-500' : 'bg-zinc-700'
+              }`}
+            >
+              <div
+                className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-transform ${
+                  pushEnabled ? 'translate-x-6' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+
+          {pushEnabled && (
+            <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
+              <p className="text-xs text-blue-300 font-medium mb-2">알림 유형</p>
+              <ul className="space-y-1.5 text-xs text-zinc-400">
+                <li className="flex items-center gap-2">
+                  <span className="text-blue-400">•</span> 학습 리마인더 (아침 8시, 점심 12시, 저녁 8시)
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-blue-400">•</span> 연속 출석 축하 알림
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-blue-400">•</span> 미룬 단어 복습 리마인더
+                </li>
+              </ul>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Account */}
