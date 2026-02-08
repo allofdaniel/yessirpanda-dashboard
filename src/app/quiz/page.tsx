@@ -72,6 +72,7 @@ function QuizContent() {
         body: JSON.stringify({
           email,
           day: parseInt(day),
+          quiz_type: 'lunch', // Can be changed to morning/evening as needed
           results: words.map(w => ({
             word: w.word,
             meaning: w.meaning,
@@ -82,8 +83,8 @@ function QuizContent() {
       if (!res.ok) throw new Error('제출 실패');
       const data = await res.json();
       setResult({
-        memorized: words.filter(w => w.status === 'memorized').length,
-        relearn: words.filter(w => w.status === 'relearn').length,
+        memorized: data.score || words.filter(w => w.status === 'memorized').length,
+        relearn: data.relearn || words.filter(w => w.status === 'relearn').length,
       });
       setSubmitted(true);
     } catch {

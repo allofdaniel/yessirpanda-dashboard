@@ -23,6 +23,7 @@ async function hmacSha256(secret: string, message: string): Promise<string> {
 
 // Solapi API for sending KakaoTalk messages (알림톡/친구톡)
 // Docs: https://docs.solapi.com/
+// Template ID 129026 is used for daily words messages
 async function sendSolapiMessage(
   apiKey: string,
   apiSecret: string,
@@ -33,6 +34,7 @@ async function sendSolapiMessage(
     kakaoOptions?: {
       pfId: string
       templateId?: string
+      variables?: Record<string, string>
       buttons?: Array<{
         buttonType: string
         buttonName: string
@@ -53,7 +55,7 @@ async function sendSolapiMessage(
       to: params.to,
       from: params.from,
       text: params.text,
-      type: 'ATA', // 알림톡
+      type: 'ATA', // 알림톡 (Alimtalk - Template-based KakaoTalk message)
       kakaoOptions: params.kakaoOptions,
     },
   }
@@ -109,14 +111,15 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Get kakao users with linked emails
-    const { data: kakaoUsers } = await supabase
-      .from('kakao_users')
-      .select('kakao_user_id, email, name')
-      .not('email', 'is', null)
+    // Get subscribers who have 'kakao' in their channels array
+    const { data: kakaoSubscribers } = await supabase
+      .from('subscribers')
+      .select('email, name, phone')
+      .eq('status', 'active')
+      .contains('channels', ['kakao'])
 
-    if (!kakaoUsers || kakaoUsers.length === 0) {
-      return new Response(JSON.stringify({ error: 'No registered KakaoTalk users' }), {
+    if (!kakaoSubscribers || kakaoSubscribers.length === 0) {
+      return new Response(JSON.stringify({ error: 'No subscribers with KakaoTalk channel enabled' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 404,
       })
@@ -124,6 +127,7 @@ Deno.serve(async (req) => {
 
     // Build message based on type
     let messageText = ''
+    let templateId = '129026' // KakaoTalk message template ID
     let buttons: Array<{ buttonType: string; buttonName: string; linkMobile?: string; linkPc?: string }> = []
 
     if (type === 'morning') {
@@ -142,6 +146,12 @@ Deno.serve(async (req) => {
         },
         {
           buttonType: 'WL',
+          buttonName: '⏰ 내일로 미루기',
+          linkMobile: `${dashboardUrl}/postpone?email=#{email}&day=${currentDay}`,
+          linkPc: `${dashboardUrl}/postpone?email=#{email}&day=${currentDay}`,
+        },
+        {
+          buttonType: 'WL',
           buttonName: '📊 대시보드',
           linkMobile: `${dashboardUrl}/login`,
           linkPc: `${dashboardUrl}/login`,
@@ -156,6 +166,12 @@ Deno.serve(async (req) => {
           buttonName: '테스트 시작하기',
           linkMobile: `${dashboardUrl}/quiz?day=${currentDay}&email=#{email}`,
           linkPc: `${dashboardUrl}/quiz?day=${currentDay}&email=#{email}`,
+        },
+        {
+          buttonType: 'WL',
+          buttonName: '⏰ 내일로 미루기',
+          linkMobile: `${dashboardUrl}/postpone?email=#{email}&day=${currentDay}`,
+          linkPc: `${dashboardUrl}/postpone?email=#{email}&day=${currentDay}`,
         },
       ]
     } else if (type === 'review') {
@@ -180,24 +196,25 @@ Deno.serve(async (req) => {
     // If Solapi is configured, send via Solapi (알림톡)
     if (solapiApiKey && solapiApiSecret && solapiPfId && solapiSender) {
       const results = []
-      for (const user of kakaoUsers) {
-        // Get subscriber phone number
-        const { data: subscriber } = await supabase
-          .from('subscribers')
-          .select('phone')
-          .eq('email', user.email)
-          .single()
-
-        if (!subscriber?.phone) continue
+      for (const subscriber of kakaoSubscribers) {
+        // Check if phone number exists
+        if (!subscriber.phone || subscriber.phone.trim() === '') {
+          results.push({
+            email: subscriber.email,
+            status: 'skipped',
+            error: 'No phone number registered'
+          })
+          continue
+        }
 
         // Replace email placeholder in button URLs
         const userButtons = buttons.map(b => ({
           ...b,
-          linkMobile: b.linkMobile?.replace('#{email}', encodeURIComponent(user.email)),
-          linkPc: b.linkPc?.replace('#{email}', encodeURIComponent(user.email)),
+          linkMobile: b.linkMobile?.replace('#{email}', encodeURIComponent(subscriber.email)),
+          linkPc: b.linkPc?.replace('#{email}', encodeURIComponent(subscriber.email)),
         }))
 
-        const personalMessage = messageText.replace('#{name}', user.name || '학습자')
+        const personalMessage = messageText.replace('#{name}', subscriber.name || '학습자')
 
         try {
           const result = await sendSolapiMessage(solapiApiKey, solapiApiSecret, {
@@ -206,12 +223,13 @@ Deno.serve(async (req) => {
             text: personalMessage,
             kakaoOptions: {
               pfId: solapiPfId,
+              templateId: templateId,
               buttons: userButtons,
             },
           })
-          results.push({ email: user.email, status: 'sent', result })
+          results.push({ email: subscriber.email, status: 'sent', result })
         } catch (err) {
-          results.push({ email: user.email, status: 'error', error: (err as Error).message })
+          results.push({ email: subscriber.email, status: 'error', error: (err as Error).message })
         }
       }
 
@@ -219,7 +237,8 @@ Deno.serve(async (req) => {
         success: true,
         type,
         day: currentDay,
-        sent: results.length,
+        sent: results.filter(r => r.status === 'sent').length,
+        total: kakaoSubscribers.length,
         results,
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -233,8 +252,13 @@ Deno.serve(async (req) => {
       day: currentDay,
       message: messageText,
       buttons,
-      users: kakaoUsers.map((u: { email: string; name: string }) => ({ email: u.email, name: u.name })),
-      note: 'Solapi credentials not configured. Set SOLAPI_API_KEY, SOLAPI_API_SECRET, SOLAPI_PF_ID, and SOLAPI_SENDER to enable automatic sending.',
+      templateId: templateId,
+      subscribers: kakaoSubscribers.map((s: { email: string; name: string; phone?: string }) => ({
+        email: s.email,
+        name: s.name,
+        hasPhone: !!s.phone
+      })),
+      note: 'Solapi credentials not configured. Set SOLAPI_API_KEY, SOLAPI_API_SECRET, SOLAPI_PF_ID, and SOLAPI_SENDER environment variables to enable automatic sending.',
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })

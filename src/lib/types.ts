@@ -104,3 +104,31 @@ export interface DbAttendance {
   type: 'morning' | 'lunch' | 'evening';
   completed: boolean;
 }
+
+// Quiz Results types
+export interface QuizAnswer {
+  word: string;
+  meaning: string;
+  memorized: boolean;
+}
+
+export interface QuizResult {
+  Email: string;
+  Day: number;
+  QuizType: 'morning' | 'lunch' | 'evening';
+  Score: number;
+  Total: number;
+  Answers: QuizAnswer[];
+  CreatedAt: string;
+}
+
+export interface DbQuizResult {
+  id: number;
+  email: string;
+  day: number;
+  quiz_type: 'morning' | 'lunch' | 'evening';
+  score: number;
+  total: number;
+  answers: QuizAnswer[];
+  created_at: string;
+}

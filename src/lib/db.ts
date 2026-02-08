@@ -2,7 +2,7 @@
 
 import { getServerClient } from './supabase';
 import type {
-  Config, Word, WrongWord, Result, Attendance, Subscriber,
+  Config, Word, WrongWord, Result, Attendance, Subscriber, QuizResult, QuizAnswer,
 } from './types';
 
 // Config operations
@@ -196,4 +196,54 @@ export async function getSubscribers(): Promise<Subscriber[]> {
     Name: row.name,
     Status: row.status,
   }));
+}
+
+// Quiz Results operations
+export async function getQuizResults(email?: string, day?: number): Promise<QuizResult[]> {
+  const supabase = getServerClient();
+  let query = supabase.from('quiz_results').select('*');
+
+  if (email) {
+    query = query.eq('email', email);
+  }
+  if (day !== undefined) {
+    query = query.eq('day', day);
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: false });
+
+  if (error) throw new Error(`Failed to fetch quiz results: ${error.message}`);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data || []).map((row: any) => ({
+    Email: row.email,
+    Day: row.day,
+    QuizType: row.quiz_type,
+    Score: row.score,
+    Total: row.total,
+    Answers: row.answers,
+    CreatedAt: row.created_at,
+  }));
+}
+
+export async function saveQuizResult(
+  email: string,
+  day: number,
+  quizType: 'morning' | 'lunch' | 'evening',
+  score: number,
+  total: number,
+  answers: QuizAnswer[]
+): Promise<void> {
+  const supabase = getServerClient();
+  const { error } = await supabase.from('quiz_results').insert({
+    email,
+    day,
+    quiz_type: quizType,
+    score,
+    total,
+    answers,
+    created_at: new Date().toISOString(),
+  });
+
+  if (error) throw new Error(`Failed to save quiz result: ${error.message}`);
 }
