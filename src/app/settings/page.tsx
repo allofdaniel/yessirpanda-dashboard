@@ -18,6 +18,8 @@ interface Settings {
   timezone: string
   email_enabled: boolean
   kakao_enabled: boolean
+  paused: boolean
+  active_days: number[] // 0=일, 1=월, 2=화, 3=수, 4=목, 5=금, 6=토
 }
 
 interface LinkedProvider {
@@ -37,7 +39,11 @@ export default function SettingsPage() {
     timezone: 'Asia/Seoul',
     email_enabled: true,
     kakao_enabled: true,
+    paused: false,
+    active_days: [1, 2, 3, 4, 5], // 평일만 기본값
   })
+  const [inviteCode, setInviteCode] = useState('')
+  const [copySuccess, setCopySuccess] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState('')
@@ -70,14 +76,35 @@ export default function SettingsPage() {
       if (data.settings) setSettings(data.settings)
     }
 
-    // Fetch linked channels from subscribers table
+    // Fetch linked channels and invite code from subscribers table
     const { data: subscriber } = await supabase
       .from('subscribers')
-      .select('channels')
+      .select('channels, invite_code, status, active_days')
       .eq('email', authUser.email)
       .single()
 
     const channels = subscriber?.channels || [currentProvider]
+
+    // Generate invite code if not exists
+    if (!subscriber?.invite_code) {
+      const newCode = Math.random().toString(36).substring(2, 8).toUpperCase()
+      await supabase
+        .from('subscribers')
+        .update({ invite_code: newCode })
+        .eq('email', authUser.email)
+      setInviteCode(newCode)
+    } else {
+      setInviteCode(subscriber.invite_code)
+    }
+
+    // Set paused status and active days
+    if (subscriber) {
+      setSettings(prev => ({
+        ...prev,
+        paused: subscriber.status === 'paused',
+        active_days: subscriber.active_days || [1, 2, 3, 4, 5],
+      }))
+    }
     setLinkedProviders(prev => prev.map(p => ({
       ...p,
       linked: channels.includes(p.id)
@@ -108,6 +135,51 @@ export default function SettingsPage() {
       setTimeout(() => setToast(''), 2000)
     }
     setSaving(false)
+  }
+
+  const handleTogglePause = async () => {
+    if (!user) return
+    const newPaused = !settings.paused
+
+    try {
+      await supabase
+        .from('subscribers')
+        .update({ status: newPaused ? 'paused' : 'active' })
+        .eq('email', user.email)
+
+      setSettings(prev => ({ ...prev, paused: newPaused }))
+      setToast(newPaused ? '구독이 일시중지되었습니다' : '구독이 재개되었습니다')
+      setTimeout(() => setToast(''), 2000)
+    } catch (error) {
+      console.error('Toggle pause error:', error)
+      setToast('처리 중 오류가 발생했습니다')
+      setTimeout(() => setToast(''), 3000)
+    }
+  }
+
+  const handleToggleDay = async (day: number) => {
+    const newDays = settings.active_days.includes(day)
+      ? settings.active_days.filter(d => d !== day)
+      : [...settings.active_days, day].sort()
+
+    setSettings(prev => ({ ...prev, active_days: newDays }))
+  }
+
+  const handleCopyInviteLink = async () => {
+    const inviteLink = `${window.location.origin}/invite/${inviteCode}`
+    try {
+      await navigator.clipboard.writeText(inviteLink)
+      setCopySuccess(true)
+      setToast('초대 링크가 복사되었습니다!')
+      setTimeout(() => {
+        setCopySuccess(false)
+        setToast('')
+      }, 2000)
+    } catch (error) {
+      console.error('Copy error:', error)
+      setToast('복사 실패. 수동으로 복사해주세요.')
+      setTimeout(() => setToast(''), 3000)
+    }
   }
 
   const handleLinkProvider = async (providerId: string) => {
@@ -234,6 +306,37 @@ export default function SettingsPage() {
     <div className="space-y-6 animate-fade-in">
       <h1 className="text-2xl font-bold text-white">설정</h1>
 
+      {/* Subscription Status */}
+      <div className={`card p-6 ${settings.paused ? 'border-amber-500/30 bg-amber-500/5' : ''}`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl ${
+              settings.paused ? 'bg-amber-500/20' : 'bg-emerald-500/20'
+            }`}>
+              {settings.paused ? '⏸️' : '▶️'}
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-white">
+                {settings.paused ? '구독 일시중지됨' : '학습 진행 중'}
+              </h2>
+              <p className="text-xs text-zinc-500">
+                {settings.paused ? '메시지가 발송되지 않습니다' : '매일 학습 메시지를 받고 있습니다'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleTogglePause}
+            className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
+              settings.paused
+                ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                : 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30'
+            }`}
+          >
+            {settings.paused ? '재개하기' : '일시중지'}
+          </button>
+        </div>
+      </div>
+
       {/* Learning Settings */}
       <div className="card p-6 space-y-5">
         <h2 className="text-lg font-bold text-white flex items-center gap-2">
@@ -284,6 +387,29 @@ export default function SettingsPage() {
             />
           </div>
         ))}
+
+        {/* Day of Week Selection */}
+        <div className="pt-4 border-t border-white/5">
+          <label className="block text-sm text-zinc-400 mb-3">발송 요일 선택</label>
+          <div className="flex gap-2">
+            {['일', '월', '화', '수', '목', '금', '토'].map((day, idx) => (
+              <button
+                key={idx}
+                onClick={() => handleToggleDay(idx)}
+                className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                  settings.active_days.includes(idx)
+                    ? 'bg-violet-500 text-white'
+                    : 'bg-white/5 text-zinc-500 hover:bg-white/10'
+                }`}
+              >
+                {day}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-zinc-600 mt-2">
+            선택된 요일에만 학습 메시지가 발송됩니다
+          </p>
+        </div>
       </div>
 
       {/* Notification Channels */}
@@ -467,6 +593,43 @@ export default function SettingsPage() {
         <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
           <p className="text-xs text-amber-300">
             💡 동일한 이메일로 가입된 계정끼리만 연동됩니다. 연동된 SNS 중 하나로 로그인하면 같은 계정으로 접속됩니다.
+          </p>
+        </div>
+      </div>
+
+      {/* Invite Link */}
+      <div className="card p-6 space-y-4">
+        <div>
+          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <span className="text-violet-400">🎁</span> 친구 초대
+          </h2>
+          <p className="text-xs text-zinc-500 mt-1">친구를 초대하고 함께 비즈니스 영어를 학습하세요</p>
+        </div>
+
+        <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+          <div className="flex items-center gap-3">
+            <div className="flex-1">
+              <p className="text-xs text-zinc-500 mb-1">나의 초대 링크</p>
+              <p className="text-sm text-white font-mono break-all">
+                {typeof window !== 'undefined' ? `${window.location.origin}/invite/${inviteCode}` : '...'}
+              </p>
+            </div>
+            <button
+              onClick={handleCopyInviteLink}
+              className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                copySuccess
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-violet-500/20 text-violet-400 hover:bg-violet-500/30'
+              }`}
+            >
+              {copySuccess ? '복사됨!' : '복사'}
+            </button>
+          </div>
+        </div>
+
+        <div className="p-4 rounded-xl bg-violet-500/10 border border-violet-500/20">
+          <p className="text-xs text-violet-300">
+            💡 초대 받은 친구는 자동으로 Day 1부터 시작하며, 각자의 진도로 학습합니다.
           </p>
         </div>
       </div>

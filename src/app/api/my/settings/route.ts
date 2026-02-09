@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
   const { user } = authResult
 
   const body = await request.json()
-  const { email, words_per_day, morning_time, lunch_time, evening_time, timezone, email_enabled, kakao_enabled } = body
+  const { email, words_per_day, morning_time, lunch_time, evening_time, timezone, email_enabled, kakao_enabled, active_days } = body
 
   const sanitizedEmail = sanitizeEmail(email)
   if (!sanitizedEmail) return NextResponse.json({ error: 'Valid email required' }, { status: 400 })
@@ -80,6 +80,14 @@ export async function POST(request: NextRequest) {
       { key: 'WordsPerDay', value: String(words_per_day) },
       { onConflict: 'key' }
     )
+  }
+
+  // Update active_days in subscribers table
+  if (active_days !== undefined) {
+    await supabase
+      .from('subscribers')
+      .update({ active_days })
+      .eq('email', sanitizedEmail)
   }
 
   return NextResponse.json({ success: true })

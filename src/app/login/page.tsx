@@ -1,12 +1,22 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createAuthBrowserClient } from '@/lib/supabase-auth'
 
 export default function LoginPage() {
+  const searchParams = useSearchParams()
+  const refCode = searchParams.get('ref')
   const [snsLoading, setSnsLoading] = useState<'kakao' | 'google' | 'github' | 'naver' | null>(null)
   const [error, setError] = useState('')
   const supabase = createAuthBrowserClient()
+
+  // Store referral code in session storage for use after OAuth callback
+  useEffect(() => {
+    if (refCode) {
+      sessionStorage.setItem('referral_code', refCode)
+    }
+  }, [refCode])
 
   const handleSNSLogin = async (provider: 'kakao' | 'google' | 'github') => {
     setSnsLoading(provider)
