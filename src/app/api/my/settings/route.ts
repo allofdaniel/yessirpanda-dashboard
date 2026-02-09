@@ -21,16 +21,16 @@ export async function GET(request: NextRequest) {
   const supabase = getServerClient()
   const { data, error } = await supabase
     .from('subscriber_settings')
-    .select('words_per_day, morning_time, lunch_time, evening_time, timezone')
+    .select('words_per_day, morning_time, lunch_time, evening_time, timezone, email_enabled, kakao_enabled')
     .eq('email', email)
     .single()
 
   if (error) {
     // If no settings exist, create default
     if (error.code === 'PGRST116') {
-      await supabase.from('subscriber_settings').insert({ email })
+      await supabase.from('subscriber_settings').insert({ email, email_enabled: true, kakao_enabled: true })
       return NextResponse.json({
-        settings: { words_per_day: 10, morning_time: '07:30', lunch_time: '13:00', evening_time: '16:00', timezone: 'Asia/Seoul' }
+        settings: { words_per_day: 10, morning_time: '07:30', lunch_time: '13:00', evening_time: '16:00', timezone: 'Asia/Seoul', email_enabled: true, kakao_enabled: true }
       })
     }
     return NextResponse.json({ error: error.message }, { status: 500 })
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
   const { user } = authResult
 
   const body = await request.json()
-  const { email, words_per_day, morning_time, lunch_time, evening_time, timezone } = body
+  const { email, words_per_day, morning_time, lunch_time, evening_time, timezone, email_enabled, kakao_enabled } = body
 
   const sanitizedEmail = sanitizeEmail(email)
   if (!sanitizedEmail) return NextResponse.json({ error: 'Valid email required' }, { status: 400 })
@@ -60,11 +60,13 @@ export async function POST(request: NextRequest) {
   const { error } = await supabase.from('subscriber_settings').upsert(
     {
       email: sanitizedEmail,
-      words_per_day: words_per_day || 10,
+      words_per_day: words_per_day ?? 10,
       morning_time: morning_time || '07:30',
       lunch_time: lunch_time || '13:00',
       evening_time: evening_time || '16:00',
       timezone: timezone || 'Asia/Seoul',
+      email_enabled: email_enabled ?? true,
+      kakao_enabled: kakao_enabled ?? true,
       updated_at: new Date().toISOString(),
     },
     { onConflict: 'email' }

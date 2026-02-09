@@ -16,6 +16,8 @@ interface Settings {
   lunch_time: string
   evening_time: string
   timezone: string
+  email_enabled: boolean
+  kakao_enabled: boolean
 }
 
 export default function SettingsPage() {
@@ -25,6 +27,8 @@ export default function SettingsPage() {
     lunch_time: '13:00',
     evening_time: '16:00',
     timezone: 'Asia/Seoul',
+    email_enabled: true,
+    kakao_enabled: true,
   })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -175,17 +179,64 @@ export default function SettingsPage() {
         ))}
       </div>
 
-      {/* Push Notifications */}
+      {/* Notification Channels */}
       <div className="card p-6 space-y-5">
         <h2 className="text-lg font-bold text-white flex items-center gap-2">
-          <span className="text-violet-400">🔔</span> 알림 설정
+          <span className="text-violet-400">🔔</span> 알림 채널 설정
         </h2>
 
         <div className="space-y-3">
+          {/* Email Toggle */}
           <div className="flex items-center justify-between p-4 rounded-xl bg-white/[0.02] border border-white/[0.04]">
             <div className="flex-1">
-              <p className="text-sm font-medium text-white">푸시 알림 받기</p>
-              <p className="text-xs text-zinc-500 mt-1">학습 리마인더와 출석 축하 알림을 받습니다</p>
+              <p className="text-sm font-medium text-white flex items-center gap-2">
+                <span>📧</span> 이메일 알림
+              </p>
+              <p className="text-xs text-zinc-500 mt-1">매일 아침 단어, 점심 테스트, 저녁 리뷰를 이메일로 받습니다</p>
+            </div>
+            <button
+              onClick={() => setSettings(s => ({ ...s, email_enabled: !s.email_enabled }))}
+              className={`relative w-14 h-8 rounded-full transition-all ${
+                settings.email_enabled ? 'bg-emerald-500' : 'bg-zinc-700'
+              }`}
+            >
+              <div
+                className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-transform ${
+                  settings.email_enabled ? 'translate-x-6' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* KakaoTalk Toggle */}
+          <div className="flex items-center justify-between p-4 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+            <div className="flex-1">
+              <p className="text-sm font-medium text-white flex items-center gap-2">
+                <span>💬</span> 카카오톡 알림
+              </p>
+              <p className="text-xs text-zinc-500 mt-1">카카오톡 채널 메시지로 학습 알림을 받습니다</p>
+            </div>
+            <button
+              onClick={() => setSettings(s => ({ ...s, kakao_enabled: !s.kakao_enabled }))}
+              className={`relative w-14 h-8 rounded-full transition-all ${
+                settings.kakao_enabled ? 'bg-[#FEE500]' : 'bg-zinc-700'
+              }`}
+            >
+              <div
+                className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full transition-transform ${
+                  settings.kakao_enabled ? 'translate-x-6' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* Push Notifications Toggle */}
+          <div className="flex items-center justify-between p-4 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+            <div className="flex-1">
+              <p className="text-sm font-medium text-white flex items-center gap-2">
+                <span>🔔</span> 푸시 알림
+              </p>
+              <p className="text-xs text-zinc-500 mt-1">브라우저 푸시 알림으로 리마인더를 받습니다</p>
               {!pushSupported && (
                 <p className="text-xs text-amber-400 mt-1">이 브라우저는 푸시 알림을 지원하지 않습니다</p>
               )}
@@ -204,23 +255,22 @@ export default function SettingsPage() {
               />
             </button>
           </div>
+        </div>
 
-          {pushEnabled && (
-            <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
-              <p className="text-xs text-blue-300 font-medium mb-2">알림 유형</p>
-              <ul className="space-y-1.5 text-xs text-zinc-400">
-                <li className="flex items-center gap-2">
-                  <span className="text-blue-400">•</span> 학습 리마인더 (아침 8시, 점심 12시, 저녁 8시)
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="text-blue-400">•</span> 연속 출석 축하 알림
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="text-blue-400">•</span> 미룬 단어 복습 리마인더
-                </li>
-              </ul>
-            </div>
-          )}
+        {/* Info Box */}
+        <div className="p-4 rounded-xl bg-violet-500/10 border border-violet-500/20">
+          <p className="text-xs text-violet-300 font-medium mb-2">알림 받는 내용</p>
+          <ul className="space-y-1.5 text-xs text-zinc-400">
+            <li className="flex items-center gap-2">
+              <span className="text-violet-400">•</span> 아침: 오늘의 비즈니스 영어 단어
+            </li>
+            <li className="flex items-center gap-2">
+              <span className="text-violet-400">•</span> 점심: 오전 학습 단어 테스트
+            </li>
+            <li className="flex items-center gap-2">
+              <span className="text-violet-400">•</span> 저녁: 하루 학습 요약 리뷰
+            </li>
+          </ul>
         </div>
       </div>
 

@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Get active subscribers
+    // Get active subscribers with their notification settings
     const { data: subscribers } = await supabase
       .from('subscribers')
       .select('email, name')
@@ -54,6 +54,23 @@ Deno.serve(async (req) => {
         status: 404,
       })
     }
+
+    // Get notification settings for each subscriber
+    const { data: settingsData } = await supabase
+      .from('subscriber_settings')
+      .select('email, email_enabled')
+
+    const settingsMap = new Map<string, boolean>()
+    settingsData?.forEach((s: { email: string; email_enabled: boolean | null }) => {
+      // Default to true if not set
+      settingsMap.set(s.email, s.email_enabled !== false)
+    })
+
+    // Filter subscribers who have email enabled (default true if no settings)
+    const emailEnabledSubscribers = subscribers.filter(sub => {
+      const enabled = settingsMap.get(sub.email)
+      return enabled !== false // Send if true or undefined (default)
+    })
 
     // Call Gemini API for business examples
     let geminiSection = ''
@@ -188,9 +205,11 @@ ${wordList}
 </body>
 </html>`
 
-    // Send to each subscriber
+    // Send to each subscriber who has email enabled
     const results = []
-    for (const sub of subscribers) {
+    const skipped = subscribers.length - emailEnabledSubscribers.length
+
+    for (const sub of emailEnabledSubscribers) {
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
@@ -209,7 +228,7 @@ ${wordList}
       results.push({ email: sub.email, status: res.status, id: resBody.id || null })
     }
 
-    return new Response(JSON.stringify({ success: true, day: currentDay, wordCount: words.length, sent: results.length, results }), {
+    return new Response(JSON.stringify({ success: true, day: currentDay, wordCount: words.length, sent: results.length, skipped, results }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (error) {
