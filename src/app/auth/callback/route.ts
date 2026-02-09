@@ -6,9 +6,16 @@ export async function GET(request: Request) {
   try {
     const { searchParams, origin } = new URL(request.url)
     const code = searchParams.get('code')
+    const token = searchParams.get('token')
+    const tokenType = searchParams.get('type')
     const next = searchParams.get('next') ?? '/'
 
-    // Validate code presence
+    // Handle token-based auth (Naver via magic link)
+    if (token && tokenType) {
+      return NextResponse.redirect(`${origin}/auth/verify?token=${token}&type=${tokenType}&next=${next}`)
+    }
+
+    // Validate code presence for OAuth
     if (!code) {
       console.warn('[Auth Callback] Missing authentication code')
       return NextResponse.redirect(`${origin}/login?error=missing_code`)
