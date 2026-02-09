@@ -1,75 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { createAuthBrowserClient } from '@/lib/supabase-auth'
 
-// Error message mapping for better UX
-const getErrorMessage = (error: string | null, provider?: string): string => {
-  if (!error) return ''
-
-  const errorLower = error.toLowerCase()
-
-  if (provider) {
-    return `${provider} 로그인에 실패했습니다. 다시 시도해주세요.`
-  }
-
-  if (errorLower.includes('invalid') || errorLower.includes('incorrect')) {
-    return '이메일 또는 비밀번호가 올바르지 않습니다.'
-  }
-  if (errorLower.includes('not confirmed')) {
-    return '이메일 인증을 완료해주세요.'
-  }
-  if (errorLower.includes('user_not_found')) {
-    return '등록되지 않은 이메일입니다.'
-  }
-  if (errorLower.includes('network') || errorLower.includes('timeout')) {
-    return '네트워크 연결을 확인해주세요.'
-  }
-
-  return '로그인에 실패했습니다. 다시 시도해주세요.'
-}
-
 export default function LoginPage() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
   const [snsLoading, setSnsLoading] = useState<string | null>(null)
   const [error, setError] = useState('')
-  const router = useRouter()
   const supabase = createAuthBrowserClient()
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-
-    // Validate inputs
-    if (!email || !password) {
-      setError('이메일과 비밀번호를 입력해주세요.')
-      setLoading(false)
-      return
-    }
-
-    if (!email.includes('@')) {
-      setError('유효한 이메일 주소를 입력해주세요.')
-      setLoading(false)
-      return
-    }
-
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-
-    if (error) {
-      setError(getErrorMessage(error.message))
-      setLoading(false)
-      return
-    }
-
-    router.push('/')
-    router.refresh()
-  }
-
-  const handleSNSLogin = async (provider: 'kakao' | 'google' | 'apple' | 'github') => {
+  const handleSNSLogin = async (provider: 'kakao' | 'google' | 'github') => {
     setSnsLoading(provider)
     setError('')
 
@@ -77,7 +16,6 @@ export default function LoginPage() {
       kakao: '카카오',
       google: 'Google',
       github: 'GitHub',
-      apple: 'Apple',
     }[provider]
 
     try {
@@ -86,18 +24,19 @@ export default function LoginPage() {
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
           queryParams: provider === 'kakao' ? {
-            // Request additional scopes for KakaoTalk channel
-            scope: 'profile_nickname profile_image account_email talk_message',
+            scope: 'profile_nickname profile_image account_email',
           } : undefined,
         },
       })
 
       if (error) {
-        setError(getErrorMessage(error.message, providerLabel))
+        console.error('OAuth error:', error)
+        setError(`${providerLabel} 로그인에 실패했습니다. 잠시 후 다시 시도해주세요.`)
         setSnsLoading(null)
       }
-    } catch {
-      setError(`${providerLabel} 로그인 중 오류가 발생했습니다. 다시 시도해주세요.`)
+    } catch (err) {
+      console.error('OAuth exception:', err)
+      setError(`${providerLabel} 로그인 중 오류가 발생했습니다.`)
       setSnsLoading(null)
     }
   }
@@ -149,7 +88,7 @@ export default function LoginPage() {
 
             <button
               onClick={() => handleSNSLogin('kakao')}
-              disabled={snsLoading !== null || loading}
+              disabled={snsLoading !== null}
               className="w-full h-11 sm:h-12 bg-[#FEE500] text-[#191919] font-bold text-xs sm:text-sm rounded-lg hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
               aria-label="카카오로 시작하기"
             >
@@ -161,7 +100,7 @@ export default function LoginPage() {
 
             <button
               onClick={() => handleSNSLogin('google')}
-              disabled={snsLoading !== null || loading}
+              disabled={snsLoading !== null}
               className="w-full h-11 sm:h-12 bg-white text-gray-700 font-bold text-xs sm:text-sm rounded-lg hover:bg-gray-50 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 border border-gray-200 shadow-md hover:shadow-lg"
               aria-label="Google로 시작하기"
             >
@@ -176,7 +115,7 @@ export default function LoginPage() {
 
             <button
               onClick={() => handleSNSLogin('github')}
-              disabled={snsLoading !== null || loading}
+              disabled={snsLoading !== null}
               className="w-full h-11 sm:h-12 bg-[#24292e] text-white font-bold text-xs sm:text-sm rounded-lg hover:bg-[#2f363d] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
               aria-label="GitHub로 시작하기"
             >
@@ -187,70 +126,14 @@ export default function LoginPage() {
             </button>
           </div>
 
-          {/* Divider */}
-          <div className="relative my-5 sm:my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-white/10"></div>
-            </div>
-            <div className="relative flex justify-center text-xs sm:text-sm">
-              <span className="px-4 bg-[rgba(9,9,11,0.8)] text-zinc-500">또는 이메일로 로그인</span>
-            </div>
-          </div>
-
           {/* Error Message */}
           {error && (
-            <div className="mb-4 sm:mb-5 p-3 sm:p-4 rounded-lg bg-red-500/10 border border-red-500/20 animate-in fade-in">
-              <p className="text-red-400 text-xs sm:text-sm text-center flex items-start gap-2">
-                <span className="text-base flex-shrink-0 mt-0.5">⚠️</span>
-                <span className="flex-1">{error}</span>
+            <div className="mt-4 p-3 sm:p-4 rounded-lg bg-red-500/10 border border-red-500/20">
+              <p className="text-red-400 text-xs sm:text-sm text-center">
+                ⚠️ {error}
               </p>
             </div>
           )}
-
-          {/* Form */}
-          <form onSubmit={handleLogin} className="space-y-4 sm:space-y-5">
-            <div className="space-y-1.5">
-              <label className="block text-zinc-400 text-xs sm:text-sm font-medium px-1">이메일</label>
-              <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="example@email.com"
-                disabled={loading || snsLoading !== null}
-                required
-                autoComplete="email"
-                className="w-full bg-[#121214] border border-white/10 rounded-lg h-11 sm:h-12 px-4 text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500 transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="block text-zinc-400 text-xs sm:text-sm font-medium px-1">비밀번호</label>
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••"
-                disabled={loading || snsLoading !== null}
-                required
-                autoComplete="current-password"
-                className="w-full bg-[#121214] border border-white/10 rounded-lg h-11 sm:h-12 px-4 text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500 transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading || snsLoading !== null}
-              className="w-full h-11 sm:h-12 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold text-sm rounded-lg hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-4 sm:mt-2 shadow-md hover:shadow-lg flex items-center justify-center gap-2"
-            >
-              {loading && (
-                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-              )}
-              {loading ? '로그인 중...' : '로그인'}
-            </button>
-          </form>
         </div>
       </main>
 
