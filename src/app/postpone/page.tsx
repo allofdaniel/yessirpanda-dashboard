@@ -6,16 +6,24 @@ import { useState, useEffect, Suspense } from 'react'
 function PostponeContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
-  const [message, setMessage] = useState('')
-
   const email = searchParams.get('email')
   const day = searchParams.get('day')
 
+  const [status, setStatus] = useState<'loading' | 'success' | 'error'>(() => {
+    if (!email || !day) {
+      return 'error'
+    }
+    return 'loading'
+  })
+  const [message, setMessage] = useState(() => {
+    if (!email || !day) {
+      return '잘못된 요청입니다.'
+    }
+    return ''
+  })
+
   useEffect(() => {
     if (!email || !day) {
-      setStatus('error')
-      setMessage('잘못된 요청입니다.')
       return
     }
 
@@ -47,33 +55,28 @@ function PostponeContent() {
 
   return (
     <div className="min-h-screen bg-[#09090b] flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-md rounded-xl p-8 text-center"
-        style={{
-          background: 'rgba(255, 255, 255, 0.03)',
-          backdropFilter: 'blur(16px)',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-        }}>
-
+      <div className="card w-full max-w-md p-8 text-center">
         {status === 'loading' && (
           <>
-            <div className="text-5xl mb-4 animate-bounce">🐼</div>
+            <div className="text-5xl mb-4 animate-bounce" role="status" aria-label="로딩 중">🐼</div>
             <h1 className="text-white text-xl font-bold mb-2">처리 중...</h1>
-            <p className="text-zinc-500">잠시만 기다려주세요</p>
+            <p className="text-zinc-500" aria-live="polite">잠시만 기다려주세요</p>
           </>
         )}
 
         {status === 'success' && (
           <>
-            <div className="text-5xl mb-4">✅</div>
+            <div className="text-5xl mb-4" role="img" aria-label="성공">✅</div>
             <h1 className="text-white text-xl font-bold mb-2">내일로 미뤄졌어요!</h1>
-            <p className="text-zinc-400 mb-6">{message}</p>
+            <p className="text-zinc-400 mb-6" role="status">{message}</p>
             <p className="text-zinc-500 text-sm mb-4">
               내일 다시 같은 단어를 받아보실 수 있어요.<br/>
               오늘 하루도 화이팅하세요! 💪
             </p>
             <button
               onClick={() => router.push('/')}
-              className="bg-violet-600 hover:bg-violet-700 text-white font-medium px-6 py-2 rounded-lg transition-colors"
+              className="btn-accent px-6 py-2.5 rounded-lg"
+              aria-label="대시보드로 이동"
             >
               대시보드로 이동
             </button>
@@ -82,12 +85,13 @@ function PostponeContent() {
 
         {status === 'error' && (
           <>
-            <div className="text-5xl mb-4">😢</div>
+            <div className="text-5xl mb-4" role="img" aria-label="오류">😢</div>
             <h1 className="text-white text-xl font-bold mb-2">오류 발생</h1>
-            <p className="text-zinc-400 mb-6">{message}</p>
+            <p className="text-zinc-400 mb-6" role="alert">{message}</p>
             <button
               onClick={() => router.push('/login')}
-              className="bg-zinc-700 hover:bg-zinc-600 text-white font-medium px-6 py-2 rounded-lg transition-colors"
+              className="bg-zinc-800 hover:bg-zinc-700 text-white font-medium px-6 py-2.5 rounded-lg transition-all active:scale-95"
+              aria-label="로그인 페이지로 이동"
             >
               로그인하기
             </button>
@@ -102,7 +106,10 @@ export default function PostponePage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
-        <div className="text-5xl animate-bounce">🐼</div>
+        <div className="text-center">
+          <div className="text-5xl mb-4 animate-bounce" role="status" aria-label="로딩 중">🐼</div>
+          <p className="text-zinc-500 text-sm">로딩 중...</p>
+        </div>
       </div>
     }>
       <PostponeContent />

@@ -96,7 +96,7 @@ export default function LoginPage() {
         setError(getErrorMessage(error.message, providerLabel))
         setSnsLoading(null)
       }
-    } catch (err) {
+    } catch {
       setError(`${providerLabel} 로그인 중 오류가 발생했습니다. 다시 시도해주세요.`)
       setSnsLoading(null)
     }

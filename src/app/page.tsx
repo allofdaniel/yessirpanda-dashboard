@@ -28,10 +28,6 @@ interface Attendance {
   Completed: boolean;
 }
 
-interface PostponedData {
-  postponedDays: number[];
-}
-
 export default function HomePage() {
   const [config, setConfig] = useState<Config | null>(null);
   const [words, setWords] = useState<Word[]>([]);
@@ -120,10 +116,11 @@ export default function HomePage() {
     return (
       <div className="space-y-8">
         <div className="card p-8 text-center">
-          <p className="text-zinc-400 mb-4">{error}</p>
+          <p className="text-zinc-400 mb-4" role="alert">{error}</p>
           <button
             onClick={fetchData}
             className="btn-accent px-6 py-2"
+            aria-label="데이터 다시 불러오기"
           >
             다시 시도
           </button>
@@ -150,7 +147,6 @@ export default function HomePage() {
   const sortedDates = [...new Set(attendanceList.filter((a) => a.Completed).map((a) => a.Date))].sort().reverse();
   let currentStreak = 0;
   for (let i = 0; i < sortedDates.length; i++) {
-    const dateObj = new Date(sortedDates[i]);
     const expectedDate = new Date(today);
     expectedDate.setDate(expectedDate.getDate() - i);
     const expectedDateStr = expectedDate.toISOString().split('T')[0];
@@ -198,6 +194,11 @@ export default function HomePage() {
               <div
                 className="h-full bg-gradient-to-r from-violet-600 to-pink-600 rounded-full transition-all duration-500"
                 style={{ width: `${progressPercent}%` }}
+                role="progressbar"
+                aria-valuenow={progressPercent}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label={`전체 진도율 ${progressPercent.toFixed(1)}%`}
               />
             </div>
           </div>
@@ -328,6 +329,7 @@ export default function HomePage() {
               <Link
                 href="/stats"
                 className="text-sm text-violet-400 hover:text-violet-300 transition-colors"
+                aria-label="출석 통계 전체 보기"
               >
                 전체 보기 →
               </Link>

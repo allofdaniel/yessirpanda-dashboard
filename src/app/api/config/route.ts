@@ -9,7 +9,12 @@ export async function GET() {
   } catch (error) {
     console.error('Error fetching config:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch config' },
+      {
+        error: 'Failed to fetch config',
+        details: process.env.NODE_ENV === 'development'
+          ? (error instanceof Error ? error.message : String(error))
+          : undefined
+      },
       { status: 500 }
     );
   }
@@ -33,7 +38,12 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error updating config:', error);
     return NextResponse.json(
-      { error: 'Failed to update config' },
+      {
+        error: 'Failed to update config',
+        details: process.env.NODE_ENV === 'development'
+          ? (error instanceof Error ? error.message : String(error))
+          : undefined
+      },
       { status: 500 }
     );
   }

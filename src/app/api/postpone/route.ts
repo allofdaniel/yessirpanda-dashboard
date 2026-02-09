@@ -275,7 +275,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Filter out invalid day numbers
-    const validDays = postponedDays.filter((d: any) => Number.isInteger(d) && d > 0)
+    const validDays = postponedDays.filter((d: unknown) => typeof d === 'number' && Number.isInteger(d) && d > 0)
     if (validDays.length !== postponedDays.length) {
       console.warn('[Postpone GET] Found invalid day numbers in postponed_days:', {
         email: email.substring(0, 3) + '***',

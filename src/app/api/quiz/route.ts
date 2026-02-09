@@ -1,16 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerClient } from '@/lib/supabase';
-import type { QuizAnswer, DbQuizResult } from '@/lib/types';
+import type { QuizAnswer } from '@/lib/types';
+import { requireAuth, verifyEmailOwnership, sanitizeEmail, sanitizeDay } from '@/lib/auth-middleware';
 
 // GET /api/quiz - Retrieve user's quiz history
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const email = searchParams.get('email');
-    const day = searchParams.get('day');
+    // Require authentication
+    const authResult = await requireAuth(request);
+    if (authResult instanceof NextResponse) return authResult;
+    const { user } = authResult;
 
+    const { searchParams } = new URL(request.url);
+    const emailParam = searchParams.get('email');
+    const dayParam = searchParams.get('day');
+
+    const email = sanitizeEmail(emailParam);
     if (!email) {
-      return NextResponse.json({ error: 'Email is required' }, { status: 400 });
+      return NextResponse.json({ error: 'Valid email is required' }, { status: 400 });
+    }
+
+    // Verify user can only access their own quiz history
+    if (!verifyEmailOwnership(user.email, email)) {
+      return NextResponse.json({ error: 'Forbidden', message: 'You can only access your own quiz history' }, { status: 403 });
     }
 
     const supabase = getServerClient();
@@ -20,8 +32,11 @@ export async function GET(request: NextRequest) {
       .eq('email', email)
       .order('created_at', { ascending: false });
 
-    if (day) {
-      query = query.eq('day', parseInt(day));
+    if (dayParam) {
+      const day = sanitizeDay(dayParam);
+      if (day) {
+        query = query.eq('day', day);
+      }
     }
 
     const { data, error } = await query;
@@ -41,16 +56,34 @@ export async function GET(request: NextRequest) {
 // POST /api/quiz - Submit quiz results
 export async function POST(request: NextRequest) {
   try {
+    // Require authentication
+    const authResult = await requireAuth(request);
+    if (authResult instanceof NextResponse) return authResult;
+    const { user } = authResult;
+
     const body = await request.json();
-    const { email, day, quiz_type, results } = body as {
+    const { email: emailParam, day: dayParam, quiz_type, results } = body as {
       email: string;
       day: number;
       quiz_type?: 'morning' | 'lunch' | 'evening';
       results: QuizAnswer[];
     };
 
+    const email = sanitizeEmail(emailParam);
+    const day = sanitizeDay(dayParam);
+
     if (!email || !day || !results || !Array.isArray(results)) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+      return NextResponse.json({ error: 'Missing or invalid required fields' }, { status: 400 });
+    }
+
+    // Verify user can only submit their own quiz results
+    if (!verifyEmailOwnership(user.email, email)) {
+      return NextResponse.json({ error: 'Forbidden', message: 'You can only submit your own quiz results' }, { status: 403 });
+    }
+
+    // Validate quiz_type
+    if (quiz_type && !['morning', 'lunch', 'evening'].includes(quiz_type)) {
+      return NextResponse.json({ error: 'Invalid quiz_type' }, { status: 400 });
     }
 
     const supabase = getServerClient();

@@ -17,7 +17,7 @@ interface Config {
 function KakaoContent() {
   const searchParams = useSearchParams();
   const email = searchParams.get('email') || '';
-  const mode = searchParams.get('mode') || 'words'; // words | test | review
+  // const mode = searchParams.get('mode') || 'words'; // words | test | review - reserved for future use
 
   const [config, setConfig] = useState<Config | null>(null);
   const [words, setWords] = useState<Word[]>([]);

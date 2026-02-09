@@ -55,7 +55,7 @@ export default function Navigation({ userEmail, userName }: NavProps) {
   return (
     <>
       {/* Desktop Sidebar */}
-      <nav className="hidden md:flex fixed left-0 top-0 bottom-0 w-64 flex-col bg-[#0c0c0e] border-r border-white/[0.06] z-40">
+      <nav className="hidden md:flex fixed left-0 top-0 bottom-0 w-64 flex-col bg-[#09090b] border-r border-white/[0.06] z-40" aria-label="Main navigation">
         {/* Header */}
         <div className="p-6 flex items-center gap-3">
           <div className="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center shadow-lg shadow-violet-600/20">
@@ -110,7 +110,7 @@ export default function Navigation({ userEmail, userName }: NavProps) {
       </nav>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0c0c0e] border-t border-white/[0.06] pb-[env(safe-area-inset-bottom)]">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#09090b] border-t border-white/[0.06] pb-[env(safe-area-inset-bottom)]" aria-label="Mobile navigation">
         <div className="flex justify-around h-16">
           {navItems.slice(0, 5).map((item) => {
             const isActive = pathname === item.href

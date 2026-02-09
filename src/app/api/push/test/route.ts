@@ -51,11 +51,12 @@ export async function POST(request: NextRequest) {
     await webpush.sendNotification(subscription.subscription, payload)
 
     return NextResponse.json({ success: true, message: 'Test notification sent' })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error sending test notification:', error)
+    const err = error as { statusCode?: number; message?: string }
 
     // Handle subscription expiration
-    if (error.statusCode === 410) {
+    if (err.statusCode === 410) {
       return NextResponse.json(
         { error: 'Push subscription has expired. Please re-subscribe.' },
         { status: 410 }
@@ -63,7 +64,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { error: error.message || 'Failed to send test notification' },
+      { error: err.message || 'Failed to send test notification' },
       { status: 500 }
     )
   }

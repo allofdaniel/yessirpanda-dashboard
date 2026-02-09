@@ -120,7 +120,7 @@ export default function WordsPage() {
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-red-400">{error}</div>
+        <div className="text-red-400" role="alert">{error}</div>
       </div>
     );
   }
@@ -173,9 +173,20 @@ export default function WordsPage() {
         <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
-        <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="단어, 뜻, 예문 검색..." className="w-full bg-zinc-900/80 border border-white/[0.06] rounded-xl pl-11 pr-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="단어, 뜻, 예문 검색..."
+          className="w-full bg-zinc-900/80 border border-white/[0.06] rounded-xl pl-11 pr-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50"
+          aria-label="단어 검색"
+        />
         {searchQuery && (
-          <button onClick={handleClearSearch} className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
+          <button
+            onClick={handleClearSearch}
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+            aria-label="검색 내용 지우기"
+          >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         )}
@@ -189,7 +200,7 @@ export default function WordsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in stagger-3">
           {filteredWords.map((word, index) => {
-            const isExpanded = expandedWordIndex === index;
+            // const isExpanded = expandedWordIndex === index; // Reserved for future expand/collapse feature
             return (
               <div key={index} onClick={() => toggleWordExpand(index)} className="card p-5 cursor-pointer hover:border-violet-500/30 transition-all">
                 <div className="flex items-start justify-between mb-3">

@@ -276,12 +276,14 @@ export default function ReviewPage() {
             <button
               onClick={() => router.push('/wrong')}
               className="btn-accent px-6 py-3"
+              aria-label="오답 노트 페이지로 이동"
             >
               오답 노트 보기
             </button>
             <button
               onClick={() => router.push('/')}
-              className="px-6 py-3 rounded-lg bg-zinc-900 text-zinc-300 hover:bg-zinc-800 transition-colors"
+              className="px-6 py-3 rounded-lg bg-zinc-900 text-zinc-300 hover:bg-zinc-800 active:scale-95 transition-all"
+              aria-label="홈으로 이동"
             >
               홈으로
             </button>
@@ -318,12 +320,14 @@ export default function ReviewPage() {
             <button
               onClick={fetchReviewWords}
               className="btn-accent px-6 py-3"
+              aria-label="복습 다시 시작하기"
             >
               다시 복습하기
             </button>
             <button
               onClick={() => router.push('/')}
-              className="px-6 py-3 rounded-lg bg-zinc-900 text-zinc-300 hover:bg-zinc-800 transition-colors"
+              className="px-6 py-3 rounded-lg bg-zinc-900 text-zinc-300 hover:bg-zinc-800 active:scale-95 transition-all"
+              aria-label="홈으로 이동"
             >
               홈으로
             </button>
@@ -356,6 +360,11 @@ export default function ReviewPage() {
           <div
             className="h-full bg-gradient-to-r from-violet-600 to-pink-600 rounded-full transition-all duration-500"
             style={{ width: `${progress}%` }}
+            role="progressbar"
+            aria-valuenow={progress}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`복습 진행률 ${progress.toFixed(0)}%`}
           />
         </div>
       </div>
@@ -416,13 +425,15 @@ export default function ReviewPage() {
               <div className="grid grid-cols-2 gap-4">
                 <button
                   onClick={handleDontKnow}
-                  className="px-6 py-4 rounded-xl bg-amber-500/10 border-2 border-amber-500/30 text-amber-400 hover:bg-amber-500/20 transition-all font-semibold"
+                  className="px-6 py-4 rounded-xl bg-amber-500/10 border-2 border-amber-500/30 text-amber-400 hover:bg-amber-500/20 active:scale-95 transition-all font-semibold"
+                  aria-label={`${currentWord.word} 모르겠어요`}
                 >
                   모르겠어요
                 </button>
                 <button
                   onClick={handleKnow}
-                  className="px-6 py-4 rounded-xl bg-emerald-500/10 border-2 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 transition-all font-semibold"
+                  className="px-6 py-4 rounded-xl bg-emerald-500/10 border-2 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 active:scale-95 transition-all font-semibold"
+                  aria-label={`${currentWord.word} 알았어요`}
                 >
                   알았어요
                 </button>
@@ -465,11 +476,11 @@ export default function ReviewPage() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-violet-400 mt-0.5">•</span>
-            <span>"알았어요"를 누르면 복습 목록에서 제거돼요</span>
+            <span>&quot;알았어요&quot;를 누르면 복습 목록에서 제거돼요</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-violet-400 mt-0.5">•</span>
-            <span>"모르겠어요"를 누르면 나중에 다시 나와요</span>
+            <span>&quot;모르겠어요&quot;를 누르면 나중에 다시 나와요</span>
           </li>
         </ul>
       </div>

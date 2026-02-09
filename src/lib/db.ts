@@ -66,12 +66,26 @@ export async function getAllWords(): Promise<Word[]> {
 }
 
 // WrongWords operations
-export async function getWrongWords(email?: string): Promise<WrongWord[]> {
+export async function getWrongWords(
+  email?: string,
+  options?: { limit?: number; offset?: number; mastered?: boolean }
+): Promise<WrongWord[]> {
   const supabase = getServerClient();
-  let query = supabase.from('wrong_words').select('*');
+  const limit = options?.limit ?? 100; // Default limit to prevent unbounded queries
+  const offset = options?.offset ?? 0;
+
+  let query = supabase
+    .from('wrong_words')
+    .select('*')
+    .range(offset, offset + limit - 1)
+    .order('last_wrong', { ascending: false });
 
   if (email) {
     query = query.eq('email', email);
+  }
+
+  if (options?.mastered !== undefined) {
+    query = query.eq('mastered', options.mastered);
   }
 
   const { data, error } = await query;
@@ -115,9 +129,20 @@ export async function updateWrongWord(
 }
 
 // Results operations
-export async function getResults(email?: string, day?: number): Promise<Result[]> {
+export async function getResults(
+  email?: string,
+  day?: number,
+  options?: { limit?: number; offset?: number }
+): Promise<Result[]> {
   const supabase = getServerClient();
-  let query = supabase.from('results').select('*');
+  const limit = options?.limit ?? 100; // Default limit to prevent unbounded queries
+  const offset = options?.offset ?? 0;
+
+  let query = supabase
+    .from('results')
+    .select('*')
+    .range(offset, offset + limit - 1)
+    .order('timestamp', { ascending: false });
 
   if (email) {
     query = query.eq('email', email);
@@ -126,7 +151,7 @@ export async function getResults(email?: string, day?: number): Promise<Result[]
     query = query.eq('day', day);
   }
 
-  const { data, error } = await query.order('timestamp', { ascending: false });
+  const { data, error } = await query;
 
   if (error) throw new Error(`Failed to fetch results: ${error.message}`);
 
@@ -144,15 +169,33 @@ export async function getResults(email?: string, day?: number): Promise<Result[]
 }
 
 // Attendance operations
-export async function getAttendance(email?: string): Promise<Attendance[]> {
+export async function getAttendance(
+  email?: string,
+  options?: { limit?: number; offset?: number; fromDate?: string; toDate?: string }
+): Promise<Attendance[]> {
   const supabase = getServerClient();
-  let query = supabase.from('attendance').select('*');
+  const limit = options?.limit ?? 90; // Default to 90 days (3 months)
+  const offset = options?.offset ?? 0;
+
+  let query = supabase
+    .from('attendance')
+    .select('*')
+    .range(offset, offset + limit - 1)
+    .order('date', { ascending: false });
 
   if (email) {
     query = query.eq('email', email);
   }
 
-  const { data, error } = await query.order('date', { ascending: false });
+  if (options?.fromDate) {
+    query = query.gte('date', options.fromDate);
+  }
+
+  if (options?.toDate) {
+    query = query.lte('date', options.toDate);
+  }
+
+  const { data, error } = await query;
 
   if (error) throw new Error(`Failed to fetch attendance: ${error.message}`);
 

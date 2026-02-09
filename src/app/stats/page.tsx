@@ -29,7 +29,7 @@ interface Config {
 export default function StatsPage() {
   const [attendance, setAttendance] = useState<Attendance[]>([]);
   const [results, setResults] = useState<Result[]>([]);
-  const [config, setConfig] = useState<Config | null>(null);
+  const [, setConfig] = useState<Config | null>(null); // Config loaded but not currently displayed
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 

@@ -96,59 +96,69 @@ function QuizContent() {
 
   if (!day || !email) {
     return (
-      <div style={{ minHeight: '100vh', background: '#09090b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <p style={{ color: '#71717a', fontSize: 15 }}>잘못된 접근입니다.</p>
+      <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
+        <p className="text-zinc-500 text-sm">잘못된 접근입니다.</p>
       </div>
     );
   }
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', background: '#09090b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <p style={{ color: '#71717a', fontSize: 15 }}>로딩 중...</p>
+      <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-5xl mb-4 animate-bounce">🐼</div>
+          <p className="text-zinc-500 text-sm" role="status" aria-live="polite">로딩 중...</p>
+        </div>
       </div>
     );
   }
 
   if (submitted && result) {
     return (
-      <div style={{ minHeight: '100vh', background: '#09090b', fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" }}>
-        <div style={{ maxWidth: 480, margin: '0 auto', padding: '24px 16px' }}>
-          <div style={{ textAlign: 'center', padding: '20px 0' }}>
-            <div style={{ fontSize: 48, marginBottom: 8 }}>🐼</div>
-            <h1 style={{ color: '#f4f4f5', fontSize: 20, margin: '0 0 4px' }}>테스트 완료!</h1>
-            <p style={{ color: '#71717a', fontSize: 13, margin: 0 }}>Day {day} 결과</p>
+      <div className="min-h-screen bg-[#09090b]">
+        <div className="max-w-md mx-auto px-4 py-6">
+          <div className="text-center py-5">
+            <div className="text-5xl mb-2">🐼</div>
+            <h1 className="text-zinc-100 text-xl font-bold mb-1">테스트 완료!</h1>
+            <p className="text-zinc-500 text-xs">Day {day} 결과</p>
           </div>
-          <div style={{ background: '#18181b', border: '1px solid #27272a', borderRadius: 12, padding: 20, textAlign: 'center', marginBottom: 12 }}>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 32, marginBottom: 16 }}>
+          <div className="card p-5 text-center mb-3">
+            <div className="flex justify-center gap-8 mb-4">
               <div>
-                <div style={{ fontSize: 32, fontWeight: 700, color: '#10b981' }}>{result.memorized}</div>
-                <div style={{ fontSize: 13, color: '#71717a' }}>외운 단어</div>
+                <div className="text-3xl font-bold text-emerald-400">{result.memorized}</div>
+                <div className="text-xs text-zinc-500">외운 단어</div>
               </div>
               <div>
-                <div style={{ fontSize: 32, fontWeight: 700, color: '#f87171' }}>{result.relearn}</div>
-                <div style={{ fontSize: 13, color: '#71717a' }}>재학습</div>
+                <div className="text-3xl font-bold text-red-400">{result.relearn}</div>
+                <div className="text-xs text-zinc-500">재학습</div>
               </div>
             </div>
-            <div style={{ background: '#27272a', borderRadius: 8, height: 8, overflow: 'hidden' }}>
-              <div style={{ background: '#10b981', height: '100%', width: `${(result.memorized / words.length) * 100}%`, borderRadius: 8 }} />
+            <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                style={{ width: `${(result.memorized / words.length) * 100}%` }}
+                role="progressbar"
+                aria-valuenow={(result.memorized / words.length) * 100}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              />
             </div>
-            <p style={{ color: '#a1a1aa', fontSize: 13, margin: '8px 0 0' }}>
+            <p className="text-zinc-400 text-xs mt-2">
               {result.memorized}/{words.length} 정답
             </p>
           </div>
           {result.relearn > 0 && (
-            <div style={{ background: '#18181b', border: '1px solid #7f1d1d', borderRadius: 12, padding: 16 }}>
-              <h3 style={{ color: '#f87171', fontSize: 14, margin: '0 0 8px' }}>재학습 단어</h3>
+            <div className="card p-4 border-red-900">
+              <h3 className="text-red-400 text-sm font-semibold mb-2">재학습 단어</h3>
               {words.filter(w => w.status === 'relearn').map((w, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #27272a' }}>
-                  <span style={{ color: '#f4f4f5', fontSize: 14 }}>{w.word}</span>
-                  <span style={{ color: '#a1a1aa', fontSize: 13 }}>{w.meaning}</span>
+                <div key={i} className="flex justify-between py-1.5 border-b border-zinc-800 last:border-0">
+                  <span className="text-zinc-100 text-sm">{w.word}</span>
+                  <span className="text-zinc-400 text-xs">{w.meaning}</span>
                 </div>
               ))}
             </div>
           )}
-          <p style={{ textAlign: 'center', color: '#52525b', fontSize: 12, marginTop: 16 }}>
+          <p className="text-center text-zinc-600 text-xs mt-4">
             저녁 복습에서 결과가 반영됩니다
           </p>
         </div>
@@ -157,47 +167,69 @@ function QuizContent() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#09090b', fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" }}>
-      <div style={{ maxWidth: 480, margin: '0 auto', padding: '16px 12px' }}>
+    <div className="min-h-screen bg-[#09090b]">
+      <div className="max-w-md mx-auto px-3 py-4">
         {/* Header */}
-        <div style={{ textAlign: 'center', padding: '12px 0' }}>
-          <div style={{ fontSize: 32, marginBottom: 4 }}>🐼</div>
-          <h1 style={{ color: '#f4f4f5', fontSize: 18, margin: '0 0 2px' }}>Day {day} 단어 테스트</h1>
-          <p style={{ color: '#71717a', fontSize: 12, margin: 0 }}>
+        <div className="text-center py-3">
+          <div className="text-3xl mb-1">🐼</div>
+          <h1 className="text-zinc-100 text-lg font-bold mb-0.5">Day {day} 단어 테스트</h1>
+          <p className="text-zinc-500 text-xs">
             단어를 눌러 뜻을 확인하고, 외웠는지 체크하세요
           </p>
         </div>
 
         {/* Bulk re-learn */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+        <div className="flex gap-2 mb-3">
           <button
             onClick={markAllRelearn}
-            style={{ flex: 1, background: '#7f1d1d', color: '#f87171', border: 'none', borderRadius: 8, padding: '10px 0', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+            className="flex-1 bg-red-900 text-red-400 border-none rounded-lg py-2.5 text-xs font-semibold cursor-pointer hover:bg-red-800 active:scale-[0.98] transition-all"
+            aria-label="전체 재학습 표시"
           >
             전체 재학습
           </button>
         </div>
 
-        {error && <p style={{ color: '#f87171', fontSize: 13, textAlign: 'center' }}>{error}</p>}
+        {error && (
+          <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20" role="alert">
+            <p className="text-red-400 text-xs text-center">{error}</p>
+          </div>
+        )}
 
         {/* Word Cards */}
         {words.map((w, i) => (
-          <div key={i} style={{ background: '#18181b', border: `1px solid ${w.status === 'memorized' ? '#065f46' : w.status === 'relearn' ? '#7f1d1d' : '#27272a'}`, borderRadius: 10, padding: '12px 14px', marginBottom: 8 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: w.revealed ? 8 : 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ background: '#27272a', color: '#a1a1aa', width: 22, height: 22, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>{i + 1}</span>
-                <span style={{ color: '#f4f4f5', fontSize: 16, fontWeight: 600 }}>{w.word}</span>
+          <div
+            key={i}
+            className={`card p-3.5 mb-2 ${
+              w.status === 'memorized'
+                ? 'border-emerald-700'
+                : w.status === 'relearn'
+                ? 'border-red-900'
+                : ''
+            }`}
+          >
+            <div className={`flex items-center justify-between ${w.revealed ? 'mb-2' : ''}`}>
+              <div className="flex items-center gap-2">
+                <span className="bg-zinc-800 text-zinc-400 w-5 h-5 rounded-full inline-flex items-center justify-center text-[11px] font-bold">
+                  {i + 1}
+                </span>
+                <span className="text-zinc-100 text-base font-semibold">{w.word}</span>
               </div>
               {!w.revealed && (
                 <button
                   onClick={() => revealWord(i)}
-                  style={{ background: '#27272a', color: '#a1a1aa', border: 'none', borderRadius: 6, padding: '5px 10px', fontSize: 12, cursor: 'pointer' }}
+                  className="bg-zinc-800 text-zinc-400 border-none rounded-md px-2.5 py-1 text-xs cursor-pointer hover:bg-zinc-700 active:scale-95 transition-all"
+                  aria-label={`${w.word} 정답 보기`}
                 >
                   정답 보기
                 </button>
               )}
               {w.revealed && w.status !== 'pending' && (
-                <span style={{ fontSize: 12, color: w.status === 'memorized' ? '#10b981' : '#f87171' }}>
+                <span
+                  className={`text-xs font-semibold ${
+                    w.status === 'memorized' ? 'text-emerald-400' : 'text-red-400'
+                  }`}
+                  role="status"
+                >
                   {w.status === 'memorized' ? '외움' : '재학습'}
                 </span>
               )}
@@ -205,19 +237,29 @@ function QuizContent() {
 
             {w.revealed && (
               <>
-                <div style={{ background: '#09090b', borderRadius: 6, padding: '8px 12px', marginBottom: 8 }}>
-                  <span style={{ color: '#f59e0b', fontSize: 14 }}>{w.meaning}</span>
+                <div className="bg-[#09090b] rounded-md p-2 px-3 mb-2">
+                  <span className="text-amber-500 text-sm">{w.meaning}</span>
                 </div>
-                <div style={{ display: 'flex', gap: 6 }}>
+                <div className="flex gap-1.5">
                   <button
                     onClick={() => markWord(i, 'memorized')}
-                    style={{ flex: 1, background: w.status === 'memorized' ? '#065f46' : '#18181b', color: w.status === 'memorized' ? '#10b981' : '#71717a', border: `1px solid ${w.status === 'memorized' ? '#10b981' : '#3f3f46'}`, borderRadius: 6, padding: '8px 0', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                    className={`flex-1 border rounded-md py-2 text-xs font-semibold cursor-pointer transition-all hover:scale-[1.02] active:scale-95 ${
+                      w.status === 'memorized'
+                        ? 'bg-emerald-900 text-emerald-400 border-emerald-500'
+                        : 'bg-zinc-900 text-zinc-500 border-zinc-700 hover:border-zinc-600'
+                    }`}
+                    aria-label={`${w.word} 외웠어요`}
                   >
                     외웠어요
                   </button>
                   <button
                     onClick={() => markWord(i, 'relearn')}
-                    style={{ flex: 1, background: w.status === 'relearn' ? '#7f1d1d' : '#18181b', color: w.status === 'relearn' ? '#f87171' : '#71717a', border: `1px solid ${w.status === 'relearn' ? '#f87171' : '#3f3f46'}`, borderRadius: 6, padding: '8px 0', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                    className={`flex-1 border rounded-md py-2 text-xs font-semibold cursor-pointer transition-all hover:scale-[1.02] active:scale-95 ${
+                      w.status === 'relearn'
+                        ? 'bg-red-900 text-red-400 border-red-500'
+                        : 'bg-zinc-900 text-zinc-500 border-zinc-700 hover:border-zinc-600'
+                    }`}
+                    aria-label={`${w.word} 재학습`}
                   >
                     재학습
                   </button>
@@ -231,19 +273,29 @@ function QuizContent() {
         <button
           onClick={handleSubmit}
           disabled={!allMarked || submitting}
-          style={{
-            width: '100%', marginTop: 12, marginBottom: 16,
-            background: allMarked ? 'linear-gradient(135deg,#10b981,#14b8a6)' : '#27272a',
-            color: allMarked ? '#fff' : '#52525b',
-            border: 'none', borderRadius: 10, padding: '14px 0',
-            fontSize: 15, fontWeight: 700, cursor: allMarked ? 'pointer' : 'default',
-            opacity: submitting ? 0.6 : 1,
-          }}
+          className={`w-full mt-3 mb-4 rounded-xl py-3.5 text-sm font-bold transition-all ${
+            allMarked
+              ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white cursor-pointer hover:opacity-90 active:scale-[0.98]'
+              : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
+          } ${submitting ? 'opacity-60' : ''}`}
+          aria-label={allMarked ? '결과 제출하기' : `${words.filter(w => w.status === 'pending').length}개 남음`}
         >
-          {submitting ? '제출 중...' : allMarked ? '결과 제출하기' : `${words.filter(w => w.status === 'pending').length}개 남음`}
+          {submitting ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              제출 중...
+            </span>
+          ) : allMarked ? (
+            '결과 제출하기'
+          ) : (
+            `${words.filter(w => w.status === 'pending').length}개 남음`
+          )}
         </button>
 
-        <p style={{ textAlign: 'center', color: '#52525b', fontSize: 11, margin: 0, paddingBottom: 16 }}>
+        <p className="text-center text-zinc-600 text-[11px] mb-0 pb-4">
           옛설판다 · 비즈니스 영어 마스터
         </p>
       </div>
@@ -254,8 +306,11 @@ function QuizContent() {
 export default function QuizPage() {
   return (
     <Suspense fallback={
-      <div style={{ minHeight: '100vh', background: '#09090b', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <p style={{ color: '#71717a', fontSize: 15 }}>로딩 중...</p>
+      <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-5xl mb-4 animate-bounce">🐼</div>
+          <p className="text-zinc-500 text-sm">로딩 중...</p>
+        </div>
       </div>
     }>
       <QuizContent />

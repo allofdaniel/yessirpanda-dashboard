@@ -92,7 +92,10 @@ export default function WrongPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-zinc-600">Loading...</div>
+        <div className="text-center">
+          <div className="text-5xl mb-4 animate-bounce">🐼</div>
+          <div className="text-zinc-500" role="status" aria-live="polite">로딩 중...</div>
+        </div>
       </div>
     );
   }
@@ -100,7 +103,7 @@ export default function WrongPage() {
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-red-400">{error}</div>
+        <div className="text-red-400" role="alert">{error}</div>
       </div>
     );
   }
@@ -232,11 +235,12 @@ export default function WrongPage() {
                 <button
                   onClick={() => toggleMastered(word.Word, word.Mastered)}
                   disabled={updatingWords.has(word.Word)}
-                  className={`px-4 py-2 rounded-lg transition-all ${
+                  className={`px-4 py-2 rounded-lg transition-all active:scale-95 ${
                     word.Mastered
                       ? "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
                       : "bg-gradient-to-r from-violet-500 to-pink-500 text-white hover:opacity-90"
-                  } disabled:opacity-50`}
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  aria-label={word.Mastered ? `${word.Word} 마스터 취소` : `${word.Word} 마스터 처리`}
                 >
                   {updatingWords.has(word.Word)
                     ? "..."

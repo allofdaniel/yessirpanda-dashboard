@@ -17,29 +17,44 @@ CREATE INDEX IF NOT EXISTS idx_push_subscriptions_enabled ON push_subscriptions(
 -- Add RLS (Row Level Security) policies
 ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
 
--- Allow users to read their own subscriptions
+-- Allow users to read their own subscriptions only
+-- CRITICAL FIX: Changed from USING (true) to proper email check
 CREATE POLICY "Users can read own push subscriptions"
   ON push_subscriptions
   FOR SELECT
-  USING (true);
+  USING (
+    email = auth.jwt() ->> 'email'
+  );
 
--- Allow users to insert their own subscriptions
+-- Allow users to insert their own subscriptions only
+-- CRITICAL FIX: Changed from WITH CHECK (true) to proper email check
 CREATE POLICY "Users can insert own push subscriptions"
   ON push_subscriptions
   FOR INSERT
-  WITH CHECK (true);
+  WITH CHECK (
+    email = auth.jwt() ->> 'email'
+  );
 
--- Allow users to update their own subscriptions
+-- Allow users to update their own subscriptions only
+-- CRITICAL FIX: Changed from USING (true) to proper email check
 CREATE POLICY "Users can update own push subscriptions"
   ON push_subscriptions
   FOR UPDATE
-  USING (true);
+  USING (
+    email = auth.jwt() ->> 'email'
+  )
+  WITH CHECK (
+    email = auth.jwt() ->> 'email'
+  );
 
--- Allow users to delete their own subscriptions
+-- Allow users to delete their own subscriptions only
+-- CRITICAL FIX: Changed from USING (true) to proper email check
 CREATE POLICY "Users can delete own push subscriptions"
   ON push_subscriptions
   FOR DELETE
-  USING (true);
+  USING (
+    email = auth.jwt() ->> 'email'
+  );
 
 -- Create function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_push_subscriptions_updated_at()

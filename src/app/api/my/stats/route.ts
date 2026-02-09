@@ -1,9 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerClient } from '@/lib/supabase'
+import { requireAuth, verifyEmailOwnership, sanitizeEmail } from '@/lib/auth-middleware'
 
 export async function GET(request: NextRequest) {
-  const email = request.nextUrl.searchParams.get('email')
-  if (!email) return NextResponse.json({ error: 'Email required' }, { status: 400 })
+  // Require authentication
+  const authResult = await requireAuth(request)
+  if (authResult instanceof NextResponse) return authResult
+  const { user } = authResult
+
+  const emailParam = request.nextUrl.searchParams.get('email')
+  const email = sanitizeEmail(emailParam)
+
+  if (!email) return NextResponse.json({ error: 'Valid email required' }, { status: 400 })
+
+  // Verify user can only access their own stats
+  if (!verifyEmailOwnership(user.email, email)) {
+    return NextResponse.json({ error: 'Forbidden', message: 'You can only access your own statistics' }, { status: 403 })
+  }
 
   const supabase = getServerClient()
 

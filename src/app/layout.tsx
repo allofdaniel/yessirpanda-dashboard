@@ -43,7 +43,7 @@ export default async function RootLayout({
 
   return (
     <html lang="ko">
-      <body className={`${spaceGrotesk.variable} bg-black text-zinc-100 grain`}>
+      <body className={`${spaceGrotesk.variable} bg-[#09090b] text-zinc-100 grain`}>
         {user && <Navigation userEmail={user.email || ''} userName={user.user_metadata?.name || '학습자'} />}
         <main className={user ? 'pb-20 md:pb-0 md:pl-64' : ''}>
           <div className={user ? 'mx-auto max-w-6xl px-5 py-6 md:py-8' : ''}>

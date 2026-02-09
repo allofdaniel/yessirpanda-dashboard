@@ -31,3 +31,33 @@ COMMENT ON COLUMN quiz_results.score IS 'Number of correct answers';
 COMMENT ON COLUMN quiz_results.total IS 'Total number of questions';
 COMMENT ON COLUMN quiz_results.answers IS 'JSONB array of answer objects with word, meaning, and status';
 COMMENT ON COLUMN quiz_results.created_at IS 'Timestamp when quiz was submitted';
+
+-- Enable Row Level Security
+ALTER TABLE quiz_results ENABLE ROW LEVEL SECURITY;
+
+-- Users can only read their own quiz results
+CREATE POLICY "Users can read own quiz results"
+  ON quiz_results
+  FOR SELECT
+  USING (
+    email = auth.jwt() ->> 'email'
+  );
+
+-- Users can only insert their own quiz results
+CREATE POLICY "Users can insert own quiz results"
+  ON quiz_results
+  FOR INSERT
+  WITH CHECK (
+    email = auth.jwt() ->> 'email'
+  );
+
+-- Users cannot update quiz results (immutable once submitted)
+-- No UPDATE policy - quiz results should not be modified after submission
+
+-- Users can delete their own quiz results
+CREATE POLICY "Users can delete own quiz results"
+  ON quiz_results
+  FOR DELETE
+  USING (
+    email = auth.jwt() ->> 'email'
+  );
