@@ -7,6 +7,18 @@ const corsHeaders = {
 
 const BASE = 'https://dashboard-keprojects.vercel.app'
 
+interface Subscriber {
+  email: string
+  name: string | null
+  current_day: number
+  active_days: number[] | null
+}
+
+interface Word {
+  word: string
+  meaning: string
+}
+
 function shuffleArray<T>(arr: T[]): T[] {
   const shuffled = [...arr]
   for (let i = shuffled.length - 1; i > 0; i--) {
@@ -28,41 +40,84 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    const { data: configData } = await supabase.from('config').select('key, value')
-    const config: Record<string, string> = {}
-    configData?.forEach((r: { key: string; value: string }) => { config[r.key] = r.value })
-    const currentDay = parseInt(config.CurrentDay || '1')
+    // Get today's day of week (0=Sun, 1=Mon, ..., 6=Sat)
+    const todayDayOfWeek = new Date().getDay()
 
-    const { data: words } = await supabase
-      .from('words')
-      .select('word, meaning')
-      .eq('day', currentDay)
-      .order('id')
-
-    if (!words || words.length === 0) {
-      return new Response(JSON.stringify({ error: `No words for Day ${currentDay}` }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404,
-      })
-    }
-
-    const { data: subscribers } = await supabase
+    // Get active subscribers with their personal current_day and active_days
+    const { data: subscribers, error: subError } = await supabase
       .from('subscribers')
-      .select('email, name')
+      .select('email, name, current_day, active_days')
       .eq('status', 'active')
 
+    if (subError) throw new Error(`DB error: ${subError.message}`)
     if (!subscribers || subscribers.length === 0) {
       return new Response(JSON.stringify({ error: 'No active subscribers' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404,
       })
     }
 
-    const shuffled = shuffleArray(words)
+    // Get notification settings
+    const { data: settingsData } = await supabase
+      .from('subscriber_settings')
+      .select('email, email_enabled')
 
-    const buildHtml = (name: string, email: string) => {
+    const settingsMap = new Map<string, boolean>()
+    settingsData?.forEach((s: { email: string; email_enabled: boolean | null }) => {
+      settingsMap.set(s.email, s.email_enabled !== false)
+    })
+
+    // Filter eligible subscribers
+    const eligibleSubscribers = (subscribers as Subscriber[]).filter(sub => {
+      const emailEnabled = settingsMap.get(sub.email) !== false
+      const activeDays = sub.active_days || [1, 2, 3, 4, 5]
+      const isTodayActive = activeDays.includes(todayDayOfWeek)
+      return emailEnabled && isTodayActive
+    })
+
+    if (eligibleSubscribers.length === 0) {
+      return new Response(JSON.stringify({
+        success: true,
+        message: 'No eligible subscribers for today'
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    // Group subscribers by their current_day
+    const subscribersByDay = new Map<number, Subscriber[]>()
+    for (const sub of eligibleSubscribers) {
+      const day = sub.current_day || 1
+      if (!subscribersByDay.has(day)) {
+        subscribersByDay.set(day, [])
+      }
+      subscribersByDay.get(day)!.push(sub)
+    }
+
+    // Fetch words for all needed days
+    const neededDays = Array.from(subscribersByDay.keys())
+    const { data: allWords, error: wordsError } = await supabase
+      .from('words')
+      .select('day, word, meaning')
+      .in('day', neededDays)
+      .order('id')
+
+    if (wordsError) throw new Error(`DB error: ${wordsError.message}`)
+
+    // Group words by day
+    const wordsByDay = new Map<number, Word[]>()
+    allWords?.forEach((w: { day: number; word: string; meaning: string }) => {
+      if (!wordsByDay.has(w.day)) {
+        wordsByDay.set(w.day, [])
+      }
+      wordsByDay.get(w.day)!.push({ word: w.word, meaning: w.meaning })
+    })
+
+    const buildHtml = (name: string, email: string, currentDay: number, words: Word[]) => {
       const e = encodeURIComponent(email)
       const completeLink = `${BASE}/api/complete?email=${e}&day=${currentDay}`
+      const shuffled = shuffleArray(words)
 
-      const rows = shuffled.map((w: { word: string; meaning: string }, i: number) => {
+      const rows = shuffled.map((w, i) => {
         const relearnLink = `${BASE}/api/relearn?email=${e}&day=${currentDay}&word=${encodeURIComponent(w.word)}&meaning=${encodeURIComponent(w.meaning)}`
         return `<tr>
 <td style="padding:4px 6px;color:#71717a;font-size:11px;border-bottom:1px solid #1e1e1e;text-align:center;width:20px;">${i + 1}</td>
@@ -100,27 +155,45 @@ ${rows}
 </body></html>`
     }
 
-    const results = []
-    for (const sub of subscribers) {
-      const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${resendKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: '옛설판다 <onboarding@resend.dev>',
-          to: [sub.email],
-          subject: `🍽️ Day ${currentDay} 점심 테스트`,
-          html: buildHtml(sub.name || '학습자', sub.email),
-        }),
-      })
+    const results: { email: string; day: number; status: number; id: string | null }[] = []
+    const skippedNoWords: string[] = []
 
-      const resBody = await res.json()
-      results.push({ email: sub.email, status: res.status, id: resBody.id || null })
+    for (const [day, subs] of subscribersByDay) {
+      const words = wordsByDay.get(day) || []
+
+      if (words.length === 0) {
+        subs.forEach(s => skippedNoWords.push(s.email))
+        continue
+      }
+
+      for (const sub of subs) {
+        const res = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${resendKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: '옛설판다 <onboarding@resend.dev>',
+            to: [sub.email],
+            subject: `🍽️ Day ${day} 점심 테스트`,
+            html: buildHtml(sub.name || '학습자', sub.email, day, words),
+          }),
+        })
+
+        const resBody = await res.json()
+        results.push({ email: sub.email, day, status: res.status, id: resBody.id || null })
+      }
     }
 
-    return new Response(JSON.stringify({ success: true, day: currentDay, sent: results.length, results }), {
+    return new Response(JSON.stringify({
+      success: true,
+      totalSubscribers: subscribers.length,
+      eligibleToday: eligibleSubscribers.length,
+      sent: results.length,
+      skippedNoWords,
+      results
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (error) {

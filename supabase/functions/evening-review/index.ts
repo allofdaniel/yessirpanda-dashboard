@@ -7,6 +7,18 @@ const corsHeaders = {
 
 const DASHBOARD_URL = 'https://dashboard-keprojects.vercel.app'
 
+interface Subscriber {
+  email: string
+  name: string | null
+  current_day: number
+  active_days: number[] | null
+}
+
+interface Word {
+  word: string
+  meaning: string
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -20,33 +32,23 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    // Get config
+    // Get config for total days
     const { data: configData } = await supabase.from('config').select('key, value')
     const config: Record<string, string> = {}
     configData?.forEach((r: { key: string; value: string }) => { config[r.key] = r.value })
-    const currentDay = parseInt(config.CurrentDay || '1')
-    const totalDays = parseInt(config.TotalDays || '10')
+    const totalDays = parseInt(config.TotalDays || '90')
 
-    // Get today's words
-    const { data: words } = await supabase
-      .from('words')
-      .select('word, meaning')
-      .eq('day', currentDay)
-      .order('id')
+    // Get today's day of week
+    const todayDayOfWeek = new Date().getDay()
+    const today = new Date().toISOString().slice(0, 10)
 
-    if (!words || words.length === 0) {
-      return new Response(JSON.stringify({ error: `No words for Day ${currentDay}` }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 404,
-      })
-    }
-
-    // Get active subscribers
-    const { data: subscribers } = await supabase
+    // Get active subscribers with their personal current_day and active_days
+    const { data: subscribers, error: subError } = await supabase
       .from('subscribers')
-      .select('email, name')
+      .select('email, name, current_day, active_days')
       .eq('status', 'active')
 
+    if (subError) throw new Error(`DB error: ${subError.message}`)
     if (!subscribers || subscribers.length === 0) {
       return new Response(JSON.stringify({ error: 'No active subscribers' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -54,11 +56,74 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Call Gemini API for review materials
-    let geminiSection = ''
-    try {
-      const wordList = words.map((w: { word: string; meaning: string }, i: number) => `${i + 1}. ${w.word} (${w.meaning})`).join('\n')
-      const prompt = `당신은 영어 학습 코치입니다.
+    // Get notification settings
+    const { data: settingsData } = await supabase
+      .from('subscriber_settings')
+      .select('email, email_enabled')
+
+    const settingsMap = new Map<string, boolean>()
+    settingsData?.forEach((s: { email: string; email_enabled: boolean | null }) => {
+      settingsMap.set(s.email, s.email_enabled !== false)
+    })
+
+    // Filter eligible subscribers
+    const eligibleSubscribers = (subscribers as Subscriber[]).filter(sub => {
+      const emailEnabled = settingsMap.get(sub.email) !== false
+      const activeDays = sub.active_days || [1, 2, 3, 4, 5]
+      const isTodayActive = activeDays.includes(todayDayOfWeek)
+      return emailEnabled && isTodayActive
+    })
+
+    if (eligibleSubscribers.length === 0) {
+      return new Response(JSON.stringify({
+        success: true,
+        message: 'No eligible subscribers for today'
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    // Group subscribers by their current_day
+    const subscribersByDay = new Map<number, Subscriber[]>()
+    for (const sub of eligibleSubscribers) {
+      const day = sub.current_day || 1
+      if (!subscribersByDay.has(day)) {
+        subscribersByDay.set(day, [])
+      }
+      subscribersByDay.get(day)!.push(sub)
+    }
+
+    // Fetch words for all needed days
+    const neededDays = Array.from(subscribersByDay.keys())
+    const { data: allWords, error: wordsError } = await supabase
+      .from('words')
+      .select('day, word, meaning')
+      .in('day', neededDays)
+      .order('id')
+
+    if (wordsError) throw new Error(`DB error: ${wordsError.message}`)
+
+    // Group words by day
+    const wordsByDay = new Map<number, Word[]>()
+    allWords?.forEach((w: { day: number; word: string; meaning: string }) => {
+      if (!wordsByDay.has(w.day)) {
+        wordsByDay.set(w.day, [])
+      }
+      wordsByDay.get(w.day)!.push({ word: w.word, meaning: w.meaning })
+    })
+
+    // Cache for Gemini responses by day
+    const geminiCache = new Map<number, string>()
+
+    // Generate Gemini review materials
+    const generateGeminiSection = async (words: Word[], day: number): Promise<string> => {
+      if (geminiCache.has(day)) {
+        return geminiCache.get(day)!
+      }
+
+      try {
+        const wordList = words.map((w, i) => `${i + 1}. ${w.word} (${w.meaning})`).join('\n')
+        const prompt = `당신은 영어 학습 코치입니다.
 
 오늘 학습한 단어들의 복습 자료를 만들어주세요:
 
@@ -79,138 +144,152 @@ ${wordList}
 [내일 예고]
 내일 학습을 위한 동기부여 한마디`
 
-      const geminiRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-          }),
+        const geminiRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+            }),
+          }
+        )
+        const geminiData = await geminiRes.json()
+        const geminiText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || ''
+
+        if (geminiText) {
+          const formattedText = geminiText
+            .replace(/\[(.+?)\]/g, '<h3 style="color:#a78bfa;font-size:13px;margin:10px 0 6px;">$1</h3>')
+            .replace(/\n- /g, '<br>• ')
+            .replace(/\n\n/g, '<div style="height:6px;"></div>')
+            .replace(/\n/g, '<br>')
+
+          const section = `
+            <div style="background:#18181b;border:1px solid #8b5cf640;border-radius:10px;overflow:hidden;margin-bottom:12px;">
+              <div style="padding:10px 14px;border-bottom:1px solid #27272a;background:linear-gradient(135deg,#8b5cf620,#7c3aed20);">
+                <h2 style="color:#a78bfa;font-size:14px;margin:0;">🤖 AI 복습 자료</h2>
+              </div>
+              <div style="padding:12px 14px;color:#e2e8f0;font-size:13px;line-height:1.5;">
+                ${formattedText}
+              </div>
+            </div>
+          `
+          geminiCache.set(day, section)
+          return section
         }
-      )
-      const geminiData = await geminiRes.json()
-      const geminiText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || ''
-
-      if (geminiText) {
-        const formattedText = geminiText
-          .replace(/\[(.+?)\]/g, '<h3 style="color:#a78bfa;font-size:13px;margin:10px 0 6px;">$1</h3>')
-          .replace(/\n- /g, '<br>• ')
-          .replace(/\n\n/g, '<div style="height:6px;"></div>')
-          .replace(/\n/g, '<br>')
-
-        geminiSection = `
-          <div style="background:#18181b;border:1px solid #8b5cf640;border-radius:10px;overflow:hidden;margin-bottom:12px;">
-            <div style="padding:10px 14px;border-bottom:1px solid #27272a;background:linear-gradient(135deg,#8b5cf620,#7c3aed20);">
-              <h2 style="color:#a78bfa;font-size:14px;margin:0;">🤖 AI 복습 자료</h2>
-            </div>
-            <div style="padding:12px 14px;color:#e2e8f0;font-size:13px;line-height:1.5;">
-              ${formattedText}
-            </div>
-          </div>
-        `
+      } catch (geminiError) {
+        console.error('Gemini API error:', geminiError)
       }
-    } catch (geminiError) {
-      console.error('Gemini API error:', geminiError)
+      geminiCache.set(day, '')
+      return ''
     }
 
-    const today = new Date().toISOString().slice(0, 10)
+    const results: {
+      email: string
+      day: number
+      status: number
+      id: string | null
+      completedLunch: boolean
+      wrongCount: number
+      dayAdvanced: boolean
+    }[] = []
 
-    // For each subscriber, check lunch completion and build personalized email
-    const results = []
-    let allCompleted = true
+    for (const [currentDay, subs] of subscribersByDay) {
+      const words = wordsByDay.get(currentDay) || []
+      if (words.length === 0) continue
 
-    for (const sub of subscribers) {
-      // Check if this subscriber clicked "학습 완료" today
-      const { data: lunchAttendance } = await supabase
-        .from('attendance')
-        .select('id')
-        .eq('email', sub.email)
-        .eq('type', 'lunch')
-        .eq('date', today)
-        .limit(1)
+      const geminiSection = await generateGeminiSection(words, currentDay)
 
-      const completedLunch = lunchAttendance && lunchAttendance.length > 0
-      if (!completedLunch) allCompleted = false
+      for (const sub of subs) {
+        // Check if this subscriber clicked "학습 완료" today
+        const { data: lunchAttendance } = await supabase
+          .from('attendance')
+          .select('id')
+          .eq('email', sub.email)
+          .eq('type', 'lunch')
+          .eq('date', today)
+          .limit(1)
 
-      // Get wrong words for this subscriber
-      const { data: wrongWords } = await supabase
-        .from('wrong_words')
-        .select('word, meaning, wrong_count')
-        .eq('email', sub.email)
-        .eq('mastered', false)
-        .order('wrong_count', { ascending: false })
-        .limit(20)
+        const completedLunch = lunchAttendance && lunchAttendance.length > 0
 
-      // Build quiz status section
-      let quizStatusSection = ''
-      if (completedLunch) {
-        quizStatusSection = `
-          <div style="background:#18181b;border:1px solid #065f46;border-radius:10px;padding:14px;margin-bottom:12px;text-align:center;">
-            <div style="font-size:24px;margin-bottom:4px;">✅</div>
-            <p style="color:#10b981;font-size:14px;font-weight:600;margin:0;">오늘 학습 완료!</p>
-          </div>
-        `
-      } else {
-        const completeLink = `${DASHBOARD_URL}/api/complete?email=${encodeURIComponent(sub.email)}&day=${currentDay}`
-        quizStatusSection = `
-          <div style="background:#18181b;border:1px solid #f59e0b;border-radius:10px;padding:14px;margin-bottom:12px;text-align:center;">
-            <div style="font-size:24px;margin-bottom:4px;">⚠️</div>
-            <p style="color:#f59e0b;font-size:14px;font-weight:600;margin:0 0 4px;">아직 학습 완료를 안 하셨어요!</p>
-            <p style="color:#a1a1aa;font-size:12px;margin:0 0 8px;">완료 버튼을 눌러야 다음 Day로 진행됩니다</p>
-            <a href="${completeLink}" style="display:inline-block;background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;text-decoration:none;padding:8px 24px;border-radius:8px;font-size:13px;font-weight:700;">
-              학습 완료하기
-            </a>
-          </div>
-        `
-      }
+        // Get wrong words for this subscriber
+        const { data: wrongWords } = await supabase
+          .from('wrong_words')
+          .select('word, meaning, wrong_count')
+          .eq('email', sub.email)
+          .eq('mastered', false)
+          .order('wrong_count', { ascending: false })
+          .limit(20)
 
-      // Build wrong words section
-      let wrongSection = ''
-      if (wrongWords && wrongWords.length > 0) {
-        const wrongRows = wrongWords.map((w: { word: string; meaning: string; wrong_count: number }, i: number) => `
+        // Build quiz status section
+        let quizStatusSection = ''
+        if (completedLunch) {
+          quizStatusSection = `
+            <div style="background:#18181b;border:1px solid #065f46;border-radius:10px;padding:14px;margin-bottom:12px;text-align:center;">
+              <div style="font-size:24px;margin-bottom:4px;">✅</div>
+              <p style="color:#10b981;font-size:14px;font-weight:600;margin:0;">오늘 학습 완료!</p>
+            </div>
+          `
+        } else {
+          const completeLink = `${DASHBOARD_URL}/api/complete?email=${encodeURIComponent(sub.email)}&day=${currentDay}`
+          quizStatusSection = `
+            <div style="background:#18181b;border:1px solid #f59e0b;border-radius:10px;padding:14px;margin-bottom:12px;text-align:center;">
+              <div style="font-size:24px;margin-bottom:4px;">⚠️</div>
+              <p style="color:#f59e0b;font-size:14px;font-weight:600;margin:0 0 4px;">아직 학습 완료를 안 하셨어요!</p>
+              <p style="color:#a1a1aa;font-size:12px;margin:0 0 8px;">완료 버튼을 눌러야 다음 Day로 진행됩니다</p>
+              <a href="${completeLink}" style="display:inline-block;background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;text-decoration:none;padding:8px 24px;border-radius:8px;font-size:13px;font-weight:700;">
+                학습 완료하기
+              </a>
+            </div>
+          `
+        }
+
+        // Build wrong words section
+        let wrongSection = ''
+        if (wrongWords && wrongWords.length > 0) {
+          const wrongRows = wrongWords.map((w: { word: string; meaning: string; wrong_count: number }, i: number) => `
+            <tr>
+              <td style="padding:6px;color:#a1a1aa;font-size:12px;border-bottom:1px solid #27272a;text-align:center;">${i + 1}</td>
+              <td style="padding:6px 8px;color:#f87171;font-size:13px;font-weight:600;border-bottom:1px solid #27272a;">${w.word}</td>
+              <td style="padding:6px 8px;color:#a1a1aa;font-size:12px;border-bottom:1px solid #27272a;">${w.meaning}</td>
+              <td style="padding:6px;color:#f59e0b;font-size:11px;border-bottom:1px solid #27272a;text-align:center;">${w.wrong_count}회</td>
+            </tr>
+          `).join('')
+
+          wrongSection = `
+            <div style="background:#18181b;border:1px solid #dc2626;border-radius:10px;overflow:hidden;margin-bottom:12px;">
+              <div style="padding:10px 14px;border-bottom:1px solid #27272a;background:#7f1d1d20;">
+                <h2 style="color:#f87171;font-size:14px;margin:0;">❌ 오답 노트 (${wrongWords.length}개)</h2>
+              </div>
+              <table style="width:100%;border-collapse:collapse;">
+                ${wrongRows}
+              </table>
+            </div>
+          `
+        } else {
+          wrongSection = `
+            <div style="background:#18181b;border:1px solid #27272a;border-radius:10px;padding:14px;margin-bottom:12px;text-align:center;">
+              <div style="font-size:24px;margin-bottom:4px;">🎉</div>
+              <p style="color:#10b981;font-size:14px;font-weight:600;margin:0 0 2px;">오답이 없습니다!</p>
+              <p style="color:#71717a;font-size:12px;margin:0;">모든 단어를 완벽하게 학습하셨네요</p>
+            </div>
+          `
+        }
+
+        // Build today's words review
+        const wordRows = words.map((w, i) => `
           <tr>
             <td style="padding:6px;color:#a1a1aa;font-size:12px;border-bottom:1px solid #27272a;text-align:center;">${i + 1}</td>
-            <td style="padding:6px 8px;color:#f87171;font-size:13px;font-weight:600;border-bottom:1px solid #27272a;">${w.word}</td>
+            <td style="padding:6px 8px;color:#f4f4f5;font-size:13px;font-weight:600;border-bottom:1px solid #27272a;">${w.word}</td>
             <td style="padding:6px 8px;color:#a1a1aa;font-size:12px;border-bottom:1px solid #27272a;">${w.meaning}</td>
-            <td style="padding:6px;color:#f59e0b;font-size:11px;border-bottom:1px solid #27272a;text-align:center;">${w.wrong_count}회</td>
           </tr>
         `).join('')
 
-        wrongSection = `
-          <div style="background:#18181b;border:1px solid #dc2626;border-radius:10px;overflow:hidden;margin-bottom:12px;">
-            <div style="padding:10px 14px;border-bottom:1px solid #27272a;background:#7f1d1d20;">
-              <h2 style="color:#f87171;font-size:14px;margin:0;">❌ 오답 노트 (${wrongWords.length}개)</h2>
-            </div>
-            <table style="width:100%;border-collapse:collapse;">
-              ${wrongRows}
-            </table>
-          </div>
-        `
-      } else {
-        wrongSection = `
-          <div style="background:#18181b;border:1px solid #27272a;border-radius:10px;padding:14px;margin-bottom:12px;text-align:center;">
-            <div style="font-size:24px;margin-bottom:4px;">🎉</div>
-            <p style="color:#10b981;font-size:14px;font-weight:600;margin:0 0 2px;">오답이 없습니다!</p>
-            <p style="color:#71717a;font-size:12px;margin:0;">모든 단어를 완벽하게 학습하셨네요</p>
-          </div>
-        `
-      }
+        // Calculate progress
+        const progressPercent = Math.round((currentDay / totalDays) * 100)
+        const nextDay = currentDay + 1
 
-      // Build today's words review
-      const wordRows = words.map((w: { word: string; meaning: string }, i: number) => `
-        <tr>
-          <td style="padding:6px;color:#a1a1aa;font-size:12px;border-bottom:1px solid #27272a;text-align:center;">${i + 1}</td>
-          <td style="padding:6px 8px;color:#f4f4f5;font-size:13px;font-weight:600;border-bottom:1px solid #27272a;">${w.word}</td>
-          <td style="padding:6px 8px;color:#a1a1aa;font-size:12px;border-bottom:1px solid #27272a;">${w.meaning}</td>
-        </tr>
-      `).join('')
-
-      // Calculate progress
-      const progressPercent = Math.round((currentDay / totalDays) * 100)
-      const nextDay = currentDay + 1
-
-      const html = `<!DOCTYPE html>
+        const html = `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
 <body style="margin:0;padding:0;background:#09090b;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
@@ -297,51 +376,58 @@ ${wordList}
 </body>
 </html>`
 
-      // Send email
-      const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${resendKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: '옛설판다 <onboarding@resend.dev>',
-          to: [sub.email],
-          subject: `🌙 Day ${currentDay} 저녁 복습 - 오늘의 학습 정리`,
-          html,
-        }),
-      })
+        // Send email
+        const res = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${resendKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: '옛설판다 <onboarding@resend.dev>',
+            to: [sub.email],
+            subject: `🌙 Day ${currentDay} 저녁 복습 - 오늘의 학습 정리`,
+            html,
+          }),
+        })
 
-      const resBody = await res.json()
-      results.push({
-        email: sub.email,
-        status: res.status,
-        id: resBody.id || null,
-        completedLunch,
-        wrongCount: wrongWords?.length || 0,
-      })
+        const resBody = await res.json()
 
-      // Record attendance
-      await supabase.from('attendance').upsert(
-        { email: sub.email, date: today, type: 'evening', completed: true },
-        { onConflict: 'email,date,type' }
-      )
-    }
+        // Record attendance
+        await supabase.from('attendance').upsert(
+          { email: sub.email, date: today, type: 'evening', completed: true },
+          { onConflict: 'email,date,type' }
+        )
 
-    // Only advance day if ALL subscribers completed the quiz
-    const nextDay = currentDay + 1
-    if (allCompleted && nextDay <= totalDays) {
-      await supabase.from('config').upsert(
-        { key: 'CurrentDay', value: nextDay.toString(), updated_at: new Date().toISOString() },
-        { onConflict: 'key' }
-      )
+        // Advance this individual subscriber's day if they completed lunch
+        let dayAdvanced = false
+        if (completedLunch && nextDay <= totalDays) {
+          await supabase
+            .from('subscribers')
+            .update({
+              current_day: nextDay,
+              last_lesson_at: new Date().toISOString()
+            })
+            .eq('email', sub.email)
+          dayAdvanced = true
+        }
+
+        results.push({
+          email: sub.email,
+          day: currentDay,
+          status: res.status,
+          id: resBody.id || null,
+          completedLunch,
+          wrongCount: wrongWords?.length || 0,
+          dayAdvanced,
+        })
+      }
     }
 
     return new Response(JSON.stringify({
       success: true,
-      day: currentDay,
-      nextDay: allCompleted && nextDay <= totalDays ? nextDay : null,
-      dayAdvanced: allCompleted,
+      totalSubscribers: subscribers.length,
+      eligibleToday: eligibleSubscribers.length,
       sent: results.length,
       results,
     }), {

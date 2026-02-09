@@ -6,8 +6,15 @@ import { createAuthBrowserClient } from '@/lib/supabase-auth';
 import ExportButtons from '@/components/ExportButtons';
 
 interface Config {
-  CurrentDay: string;
   TotalDays: string;
+}
+
+interface UserProgress {
+  current_day: number;
+  started_at: string | null;
+  last_lesson_at: string | null;
+  status: string;
+  active_days: number[];
 }
 
 interface Word {
@@ -30,6 +37,7 @@ interface Attendance {
 
 export default function HomePage() {
   const [config, setConfig] = useState<Config | null>(null);
+  const [userProgress, setUserProgress] = useState<UserProgress | null>(null);
   const [words, setWords] = useState<Word[]>([]);
   const [wrongWords, setWrongWords] = useState<WrongWord[]>([]);
   const [attendanceList, setAttendanceList] = useState<Attendance[]>([]);
@@ -50,8 +58,9 @@ export default function HomePage() {
       setUserEmail(email);
       setUserName(user?.user_metadata?.name || '학습자');
 
-      const [configRes, wordsRes, wrongRes, attendanceRes, postponeRes] = await Promise.all([
+      const [configRes, progressRes, wordsRes, wrongRes, attendanceRes, postponeRes] = await Promise.all([
         fetch('/api/config'),
+        fetch(`/api/my/progress?email=${encodeURIComponent(email)}`),
         fetch('/api/words'),
         fetch(`/api/wrong?email=${encodeURIComponent(email)}`),
         fetch(`/api/attendance?email=${encodeURIComponent(email)}`),
@@ -62,8 +71,9 @@ export default function HomePage() {
         throw new Error('Failed to fetch data');
       }
 
-      const [configData, wordsData, wrongData, attendanceData, postponeData] = await Promise.all([
+      const [configData, progressData, wordsData, wrongData, attendanceData, postponeData] = await Promise.all([
         configRes.json(),
+        progressRes.ok ? progressRes.json() : { current_day: 1, status: 'active', active_days: [1, 2, 3, 4, 5] },
         wordsRes.json(),
         wrongRes.json(),
         attendanceRes.json(),
@@ -71,6 +81,7 @@ export default function HomePage() {
       ]);
 
       setConfig(configData);
+      setUserProgress(progressData);
       setWords(wordsData);
       setWrongWords(wrongData);
       setAttendanceList(attendanceData);
@@ -129,8 +140,9 @@ export default function HomePage() {
     );
   }
 
-  const currentDay = parseInt(config?.CurrentDay || '0');
-  const totalDays = parseInt(config?.TotalDays || '0');
+  // Use per-user progress instead of global config
+  const currentDay = userProgress?.current_day || 1;
+  const totalDays = parseInt(config?.TotalDays || '90');
   const progressPercent = totalDays > 0 ? (currentDay / totalDays) * 100 : 0;
 
   const masteredWords = words.filter((w) => w.Day < currentDay).length;
