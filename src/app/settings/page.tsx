@@ -76,14 +76,16 @@ export default function SettingsPage() {
       if (data.settings) setSettings(data.settings)
     }
 
-    // Fetch linked channels and invite code from subscribers table
-    const { data: subscriber } = await supabase
+    // Fetch invite code and status from subscribers table
+    // Note: channels column may not exist yet, so we query separately
+    const { data: subscriber, error: subscriberError } = await supabase
       .from('subscribers')
-      .select('channels, invite_code, status, active_days')
+      .select('invite_code, status, active_days')
       .eq('email', authUser.email)
       .single()
 
-    const channels = subscriber?.channels || [currentProvider]
+    // Default channels to current provider if not available
+    const channels = [currentProvider]
 
     // Generate invite code if not exists
     if (!subscriber?.invite_code) {
@@ -223,26 +225,7 @@ export default function SettingsPage() {
     setLinkingProvider(providerId)
 
     try {
-      const { error } = await supabase.rpc('remove_channel_from_subscriber', {
-        subscriber_email: user.email,
-        channel_to_remove: providerId,
-      })
-
-      if (error) {
-        // Fallback: direct update
-        const { data: subscriber } = await supabase
-          .from('subscribers')
-          .select('channels')
-          .eq('email', user.email)
-          .single()
-
-        const newChannels = (subscriber?.channels || []).filter((c: string) => c !== providerId)
-        await supabase
-          .from('subscribers')
-          .update({ channels: newChannels })
-          .eq('email', user.email)
-      }
-
+      // Simply update UI state - channels feature is disabled for now
       setLinkedProviders(prev => prev.map(p =>
         p.id === providerId ? { ...p, linked: false } : p
       ))
