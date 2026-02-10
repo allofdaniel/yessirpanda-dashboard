@@ -41,10 +41,11 @@ Deno.serve(async (req) => {
     // Get today's day of week (0=Sun, 1=Mon, ..., 6=Sat)
     const todayDayOfWeek = new Date().getDay()
 
-    // Get active subscribers with their personal current_day and active_days
+    // Get active subscribers with their personal current_day
+    // Note: active_days column removed from SELECT until migration is applied
     const { data: subscribers, error: subError } = await supabase
       .from('subscribers')
-      .select('email, name, current_day, active_days')
+      .select('email, name, current_day')
       .eq('status', 'active')
 
     if (subError) throw new Error(`DB error: ${subError.message}`)

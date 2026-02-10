@@ -77,15 +77,15 @@ export default function SettingsPage() {
     }
 
     // Fetch invite code and status from subscribers table
-    // Note: channels column may not exist yet, so we query separately
+    // Note: active_days column may not exist yet, query without it first
     const { data: subscriber, error: subscriberError } = await supabase
       .from('subscribers')
-      .select('invite_code, status, active_days')
+      .select('invite_code, status')
       .eq('email', authUser.email)
       .single()
 
-    // Default channels to current provider if not available
-    const channels = [currentProvider]
+    // Get linked providers from auth identities
+    const linkedIdentities = authUser.identities?.map(id => id.provider) || [currentProvider]
 
     // Generate invite code if not exists
     if (!subscriber?.invite_code) {
@@ -99,17 +99,18 @@ export default function SettingsPage() {
       setInviteCode(subscriber.invite_code)
     }
 
-    // Set paused status and active days
+    // Set paused status
     if (subscriber) {
       setSettings(prev => ({
         ...prev,
         paused: subscriber.status === 'paused',
-        active_days: subscriber.active_days || [1, 2, 3, 4, 5],
       }))
     }
+
+    // Set linked providers from auth identities
     setLinkedProviders(prev => prev.map(p => ({
       ...p,
-      linked: channels.includes(p.id)
+      linked: linkedIdentities.includes(p.id)
     })))
 
     // Check push notification support and status
