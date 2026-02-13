@@ -34,7 +34,10 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith('/login') ||
     request.nextUrl.pathname.startsWith('/api/') ||
     request.nextUrl.pathname.startsWith('/quiz') ||
-    request.nextUrl.pathname.startsWith('/kakao')
+    request.nextUrl.pathname.startsWith('/kakao') ||
+    request.nextUrl.pathname.startsWith('/postpone') ||
+    request.nextUrl.pathname.startsWith('/invite') ||
+    request.nextUrl.pathname.startsWith('/auth')
 
   // If not logged in and trying to access protected routes, redirect to login
   if (!user && !isPublicPath) {

@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
         .from('subscribers')
         .insert({
           email,
-          name: user.user_metadata?.full_name || user.user_metadata?.name || '학습자',
+          name: '학습자',
           status: 'active',
           current_day: 1,
           started_at: new Date().toISOString(),

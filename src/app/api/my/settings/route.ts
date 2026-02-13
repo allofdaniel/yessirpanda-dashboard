@@ -19,24 +19,60 @@ export async function GET(request: NextRequest) {
   }
 
   const supabase = getServerClient()
+
+  // Fetch settings from subscriber_settings
   const { data, error } = await supabase
     .from('subscriber_settings')
-    .select('words_per_day, morning_time, lunch_time, evening_time, timezone, email_enabled, kakao_enabled')
+    .select('words_per_day, morning_time, lunch_time, evening_time, timezone, email_enabled, sms_enabled, kakao_enabled, telegram_enabled, telegram_chat_id, google_chat_enabled, google_chat_webhook')
     .eq('email', email)
     .single()
+
+  // Fetch active_days and phone from subscribers table
+  const { data: subscriberData } = await supabase
+    .from('subscribers')
+    .select('active_days, phone')
+    .eq('email', email)
+    .single()
+
+  const activeDays = subscriberData?.active_days || [1, 2, 3, 4, 5]
+  const phone = subscriberData?.phone || ''
 
   if (error) {
     // If no settings exist, create default
     if (error.code === 'PGRST116') {
-      await supabase.from('subscriber_settings').insert({ email, email_enabled: true, kakao_enabled: true })
+      await supabase.from('subscriber_settings').insert({ email, email_enabled: true, sms_enabled: false, kakao_enabled: false, telegram_enabled: false, google_chat_enabled: false })
       return NextResponse.json({
-        settings: { words_per_day: 10, morning_time: '07:30', lunch_time: '13:00', evening_time: '16:00', timezone: 'Asia/Seoul', email_enabled: true, kakao_enabled: true }
+        settings: {
+          words_per_day: 10,
+          morning_time: '07:30',
+          lunch_time: '13:00',
+          evening_time: '16:00',
+          timezone: 'Asia/Seoul',
+          email_enabled: true,
+          sms_enabled: false,
+          kakao_enabled: false,
+          telegram_enabled: false,
+          telegram_chat_id: '',
+          google_chat_enabled: false,
+          google_chat_webhook: '',
+          active_days: activeDays,
+          phone
+        }
       })
     }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ settings: data })
+  // Ensure nullable string fields are converted to empty strings
+  return NextResponse.json({
+    settings: {
+      ...data,
+      telegram_chat_id: data.telegram_chat_id || '',
+      google_chat_webhook: data.google_chat_webhook || '',
+      active_days: activeDays,
+      phone
+    }
+  })
 }
 
 export async function POST(request: NextRequest) {
@@ -46,7 +82,7 @@ export async function POST(request: NextRequest) {
   const { user } = authResult
 
   const body = await request.json()
-  const { email, words_per_day, morning_time, lunch_time, evening_time, timezone, email_enabled, kakao_enabled, active_days } = body
+  const { email, words_per_day, morning_time, lunch_time, evening_time, timezone, email_enabled, sms_enabled, kakao_enabled, telegram_enabled, telegram_chat_id, google_chat_enabled, google_chat_webhook, active_days, phone } = body
 
   const sanitizedEmail = sanitizeEmail(email)
   if (!sanitizedEmail) return NextResponse.json({ error: 'Valid email required' }, { status: 400 })
@@ -66,7 +102,12 @@ export async function POST(request: NextRequest) {
       evening_time: evening_time || '16:00',
       timezone: timezone || 'Asia/Seoul',
       email_enabled: email_enabled ?? true,
-      kakao_enabled: kakao_enabled ?? true,
+      sms_enabled: sms_enabled ?? false,
+      kakao_enabled: kakao_enabled ?? false,
+      telegram_enabled: telegram_enabled ?? false,
+      telegram_chat_id: telegram_chat_id || null,
+      google_chat_enabled: google_chat_enabled ?? false,
+      google_chat_webhook: google_chat_webhook || null,
       updated_at: new Date().toISOString(),
     },
     { onConflict: 'email' }
@@ -82,11 +123,15 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // Update active_days in subscribers table
-  if (active_days !== undefined) {
+  // Update active_days and phone in subscribers table
+  const subscriberUpdate: { active_days?: number[], phone?: string } = {}
+  if (active_days !== undefined) subscriberUpdate.active_days = active_days
+  if (phone !== undefined) subscriberUpdate.phone = phone
+
+  if (Object.keys(subscriberUpdate).length > 0) {
     await supabase
       .from('subscribers')
-      .update({ active_days })
+      .update(subscriberUpdate)
       .eq('email', sanitizedEmail)
   }
 

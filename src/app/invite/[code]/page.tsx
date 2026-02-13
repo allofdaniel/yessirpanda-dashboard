@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { createAuthBrowserClient } from '@/lib/supabase-auth'
 
 export default function InvitePage() {
   const params = useParams()
@@ -11,21 +10,21 @@ export default function InvitePage() {
   const [inviter, setInviter] = useState<{ name: string } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const supabase = createAuthBrowserClient()
 
   useEffect(() => {
     async function checkInvite() {
-      // Find the inviter by invite code
-      const { data: subscriber, error } = await supabase
-        .from('subscribers')
-        .select('name')
-        .eq('invite_code', code)
-        .single()
+      try {
+        // Use API to find the inviter by invite code
+        const res = await fetch(`/api/invite/${encodeURIComponent(code)}`)
+        const data = await res.json()
 
-      if (error || !subscriber) {
-        setError('유효하지 않은 초대 링크입니다')
-      } else {
-        setInviter(subscriber)
+        if (!res.ok || data.error) {
+          setError('유효하지 않은 초대 링크입니다')
+        } else {
+          setInviter(data.inviter)
+        }
+      } catch {
+        setError('초대 링크를 확인하는 중 오류가 발생했습니다')
       }
       setLoading(false)
     }
@@ -33,7 +32,7 @@ export default function InvitePage() {
     if (code) {
       checkInvite()
     }
-  }, [code, supabase])
+  }, [code])
 
   const handleJoin = () => {
     // Redirect to login with referral code

@@ -9,6 +9,8 @@ export async function GET(request: Request) {
     const token = searchParams.get('token')
     const tokenType = searchParams.get('type')
     const next = searchParams.get('next') ?? '/'
+    const refCode = searchParams.get('ref') // Referral code from invite link
+    const isLinkOperation = searchParams.get('link') === 'true' // Identity linking operation
 
     // Handle token-based auth (Naver via magic link)
     if (token && tokenType) {
@@ -72,6 +74,18 @@ export async function GET(request: Request) {
     const user = data.user
     const provider = user.app_metadata?.provider
     const email = user.email
+    const identities = user.identities || []
+
+    // Log identity information for link operations
+    if (isLinkOperation) {
+      console.info('[Auth Callback] Link operation completed:', {
+        email,
+        userId: user.id,
+        provider,
+        identityCount: identities.length,
+        linkedProviders: identities.map(id => id.provider),
+      })
+    }
 
     // Validate email
     if (!email) {
@@ -98,12 +112,30 @@ export async function GET(request: Request) {
       }
 
       if (!existingSub) {
+        // Find referrer email if refCode provided
+        let referrerEmail: string | null = null
+        if (refCode) {
+          // Try to find referrer by invite_code or email prefix
+          const { data: referrer } = await supabase
+            .from('subscribers')
+            .select('email')
+            .or(`invite_code.eq.${refCode.toUpperCase()},email.ilike.${refCode.toLowerCase()}%`)
+            .limit(1)
+            .single()
+
+          if (referrer?.email) {
+            referrerEmail = referrer.email
+            console.info('[Auth Callback] Referrer found:', { refCode, referrerEmail })
+          }
+        }
+
         // Create new subscriber
         const { error: insertError } = await supabase.from('subscribers').insert({
           email,
           name: user.user_metadata?.full_name || user.user_metadata?.name || '학습자',
           status: 'active',
           channels: [provider], // Track which channels they signed up with
+          ...(referrerEmail && { referred_by: referrerEmail }),
         })
 
         if (insertError) {
@@ -181,7 +213,14 @@ export async function GET(request: Request) {
     }
 
     // Validate redirect URL
-    const redirectUrl = `${origin}${next}`
+    let redirectUrl = `${origin}${next}`
+
+    // Add linked provider info for link operations so UI can show success
+    if (isLinkOperation && provider) {
+      const separator = next.includes('?') ? '&' : '?'
+      redirectUrl = `${origin}${next}${separator}linked=${provider}`
+    }
+
     try {
       new URL(redirectUrl)
     } catch {
@@ -189,7 +228,7 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${origin}/`)
     }
 
-    console.info('[Auth Callback] Authentication successful:', { email, provider })
+    console.info('[Auth Callback] Authentication successful:', { email, provider, isLinkOperation })
     return NextResponse.redirect(redirectUrl)
   } catch (error) {
     console.error('[Auth Callback] Unexpected error:', {

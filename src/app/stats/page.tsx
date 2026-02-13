@@ -66,14 +66,26 @@ export default function StatsPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // Calculate streak
+  // Calculate streak (allows starting from yesterday if today has no attendance)
   const calculateStreak = () => {
     const sortedDates = [...new Set(attendance.map((a) => a.Date))].sort(
       (a, b) => new Date(b).getTime() - new Date(a).getTime()
     );
+    if (sortedDates.length === 0) return 0;
+
     let streak = 0;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+
+    // Check if most recent attendance is today or yesterday
+    const latestDate = new Date(sortedDates[0]);
+    latestDate.setHours(0, 0, 0, 0);
+    const initialDiff = Math.floor(
+      (today.getTime() - latestDate.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    // Only count streak if latest attendance is within 1 day (today or yesterday)
+    if (initialDiff > 1) return 0;
 
     for (let i = 0; i < sortedDates.length; i++) {
       const date = new Date(sortedDates[i]);
@@ -82,7 +94,8 @@ export default function StatsPage() {
         (today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24)
       );
 
-      if (daysDiff === i) {
+      // Allow starting from yesterday (initialDiff) and count consecutive days
+      if (daysDiff === i + initialDiff) {
         streak++;
       } else {
         break;

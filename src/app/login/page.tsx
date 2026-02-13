@@ -29,10 +29,15 @@ export default function LoginPage() {
     }[provider]
 
     try {
+      // Include referral code in redirect URL if present
+      const redirectUrl = refCode
+        ? `${window.location.origin}/auth/callback?ref=${encodeURIComponent(refCode)}`
+        : `${window.location.origin}/auth/callback`
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: redirectUrl,
           queryParams: provider === 'kakao' ? {
             scope: 'profile_nickname profile_image account_email',
           } : undefined,

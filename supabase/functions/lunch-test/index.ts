@@ -44,10 +44,9 @@ Deno.serve(async (req) => {
     const todayDayOfWeek = new Date().getDay()
 
     // Get active subscribers with their personal current_day
-    // Note: active_days column removed from SELECT until migration is applied
     const { data: subscribers, error: subError } = await supabase
       .from('subscribers')
-      .select('email, name, current_day')
+      .select('email, name, current_day, active_days')
       .eq('status', 'active')
 
     if (subError) throw new Error(`DB error: ${subError.message}`)
@@ -57,23 +56,118 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Get notification settings
+    // Get notification settings (all channels)
     const { data: settingsData } = await supabase
       .from('subscriber_settings')
-      .select('email, email_enabled')
+      .select('email, email_enabled, telegram_enabled, telegram_chat_id, google_chat_enabled, google_chat_webhook')
 
-    const settingsMap = new Map<string, boolean>()
-    settingsData?.forEach((s: { email: string; email_enabled: boolean | null }) => {
-      settingsMap.set(s.email, s.email_enabled !== false)
+    interface SubscriberSettings {
+      email_enabled: boolean
+      telegram_enabled: boolean
+      telegram_chat_id: string | null
+      google_chat_enabled: boolean
+      google_chat_webhook: string | null
+    }
+    const settingsMap = new Map<string, SubscriberSettings>()
+    settingsData?.forEach((s: {
+      email: string
+      email_enabled: boolean | null
+      telegram_enabled: boolean | null
+      telegram_chat_id: string | null
+      google_chat_enabled: boolean | null
+      google_chat_webhook: string | null
+    }) => {
+      settingsMap.set(s.email, {
+        email_enabled: s.email_enabled !== false,
+        telegram_enabled: s.telegram_enabled === true,
+        telegram_chat_id: s.telegram_chat_id,
+        google_chat_enabled: s.google_chat_enabled === true,
+        google_chat_webhook: s.google_chat_webhook,
+      })
     })
 
-    // Filter eligible subscribers
+    // Filter eligible subscribers (any channel enabled)
     const eligibleSubscribers = (subscribers as Subscriber[]).filter(sub => {
-      const emailEnabled = settingsMap.get(sub.email) !== false
+      const settings = settingsMap.get(sub.email) || { email_enabled: true, telegram_enabled: false, google_chat_enabled: false, telegram_chat_id: null, google_chat_webhook: null }
+      const hasAnyChannel = settings.email_enabled || settings.telegram_enabled || settings.google_chat_enabled
       const activeDays = sub.active_days || [1, 2, 3, 4, 5]
       const isTodayActive = activeDays.includes(todayDayOfWeek)
-      return emailEnabled && isTodayActive
+      return hasAnyChannel && isTodayActive
     })
+
+    // Telegram Bot token
+    const telegramBotToken = Deno.env.get('TELEGRAM_BOT_TOKEN')
+
+    // Send Telegram message with inline buttons
+    const sendTelegram = async (chatId: string, text: string, buttons?: { text: string; url: string }[]) => {
+      if (!telegramBotToken || !chatId) return false
+      try {
+        const body: Record<string, unknown> = {
+          chat_id: chatId,
+          text,
+          parse_mode: 'HTML',
+        }
+        if (buttons && buttons.length > 0) {
+          body.reply_markup = {
+            inline_keyboard: [buttons.map(b => ({ text: b.text, url: b.url }))]
+          }
+        }
+        const res = await fetch(`https://api.telegram.org/bot${telegramBotToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        return res.ok
+      } catch (e) {
+        console.error('Telegram error:', e)
+        return false
+      }
+    }
+
+    // Send Google Chat message with card buttons
+    const sendGoogleChat = async (webhookUrl: string, text: string, buttons?: { text: string; url: string }[]) => {
+      if (!webhookUrl) return false
+      try {
+        let body: Record<string, unknown>
+        if (buttons && buttons.length > 0) {
+          body = {
+            cardsV2: [{
+              cardId: 'lunch-test',
+              card: {
+                header: {
+                  title: '🐼 옛설판다',
+                  subtitle: '점심 테스트'
+                },
+                sections: [{
+                  widgets: [
+                    { textParagraph: { text } },
+                    {
+                      buttonList: {
+                        buttons: buttons.map(b => ({
+                          text: b.text,
+                          onClick: { openLink: { url: b.url } }
+                        }))
+                      }
+                    }
+                  ]
+                }]
+              }
+            }]
+          }
+        } else {
+          body = { text }
+        }
+        const res = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        return res.ok
+      } catch (e) {
+        console.error('Google Chat error:', e)
+        return false
+      }
+    }
 
     if (eligibleSubscribers.length === 0) {
       return new Response(JSON.stringify({
@@ -149,14 +243,15 @@ Deno.serve(async (req) => {
 ${rows}
 </table>
 <div style="text-align:center;margin:10px 0 6px;">
-<a href="${BASE}/login" style="display:inline-block;background:#8B5CF6;color:#fff;text-decoration:none;padding:8px 20px;border-radius:8px;font-size:12px;font-weight:600;">📊 내 학습 관리</a>
+<a href="${BASE}/login" style="display:inline-block;background:#8B5CF6;color:#fff;text-decoration:none;padding:8px 20px;border-radius:8px;font-size:12px;font-weight:600;margin-right:8px;">📊 내 학습 관리</a>
+<a href="${BASE}/postpone?email=${e}&day=${currentDay}" style="display:inline-block;background:#ec4899;color:#fff;text-decoration:none;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:600;">⏰ 내일로 미루기</a>
 </div>
 <p style="text-align:center;color:#3f3f46;font-size:9px;margin:6px 0 0;">옛설판다 · 비즈니스 영어</p>
 </div>
 </body></html>`
     }
 
-    const results: { email: string; day: number; status: number; id: string | null }[] = []
+    const results: { email: string; day: number; email_sent: boolean; telegram_sent: boolean; gchat_sent: boolean }[] = []
     const skippedNoWords: string[] = []
 
     for (const [day, subs] of subscribersByDay) {
@@ -167,23 +262,64 @@ ${rows}
         continue
       }
 
-      for (const sub of subs) {
-        const res = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${resendKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            from: '옛설판다 <onboarding@resend.dev>',
-            to: [sub.email],
-            subject: `🍽️ Day ${day} 점심 테스트`,
-            html: buildHtml(sub.name || '학습자', sub.email, day, words),
-          }),
-        })
+      // Build text for Telegram/Google Chat
+      const wordListText = shuffleArray(words).map((w, i) => `${i + 1}. ${w.word} - ???`).join('\n')
+      const telegramText = (name: string, currentDay: number, email: string) =>
+        `🍽️ <b>Day ${currentDay} 점심 테스트</b>\n\n` +
+        `${name}님, 뜻을 떠올려보세요!\n\n` +
+        `📝 <b>오늘의 단어:</b>\n` + wordListText + `\n\n` +
+        `✏️ 테스트 하기: ${BASE}/quiz?day=${currentDay}&email=${encodeURIComponent(email)}`
 
-        const resBody = await res.json()
-        results.push({ email: sub.email, day, status: res.status, id: resBody.id || null })
+      const googleChatText = (name: string, currentDay: number, email: string) =>
+        `🍽️ *Day ${currentDay} 점심 테스트*\n\n` +
+        `${name}님, 뜻을 떠올려보세요!\n\n` +
+        `📝 *오늘의 단어:*\n` + wordListText + `\n\n` +
+        `✏️ 테스트 하기: ${BASE}/quiz?day=${currentDay}&email=${encodeURIComponent(email)}`
+
+      for (const sub of subs) {
+        const settings = settingsMap.get(sub.email) || { email_enabled: true, telegram_enabled: false, google_chat_enabled: false, telegram_chat_id: null, google_chat_webhook: null }
+        const name = sub.name || '학습자'
+
+        let emailSent = false
+        let telegramSent = false
+        let gchatSent = false
+
+        // Send Email
+        if (settings.email_enabled) {
+          const res = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${resendKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              from: '옛설판다 <onboarding@resend.dev>',
+              to: [sub.email],
+              subject: `🍽️ Day ${day} 점심 테스트`,
+              html: buildHtml(name, sub.email, day, words),
+            }),
+          })
+          emailSent = res.ok
+        }
+
+        // Build action buttons for lunch test
+        const actionButtons = [
+          { text: '✅ 학습 완료', url: `${BASE}/api/complete?email=${encodeURIComponent(sub.email)}&day=${day}` },
+          { text: '📊 학습 관리', url: `${BASE}/login` },
+          { text: '⏰ 내일로 미루기', url: `${BASE}/postpone?email=${encodeURIComponent(sub.email)}&day=${day}` }
+        ]
+
+        // Send Telegram
+        if (settings.telegram_enabled && settings.telegram_chat_id) {
+          telegramSent = await sendTelegram(settings.telegram_chat_id, telegramText(name, day, sub.email), actionButtons)
+        }
+
+        // Send Google Chat
+        if (settings.google_chat_enabled && settings.google_chat_webhook) {
+          gchatSent = await sendGoogleChat(settings.google_chat_webhook, googleChatText(name, day, sub.email), actionButtons)
+        }
+
+        results.push({ email: sub.email, day, email_sent: emailSent, telegram_sent: telegramSent, gchat_sent: gchatSent })
       }
     }
 
