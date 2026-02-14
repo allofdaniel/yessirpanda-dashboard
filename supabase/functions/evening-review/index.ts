@@ -38,9 +38,10 @@ Deno.serve(async (req) => {
     configData?.forEach((r: { key: string; value: string }) => { config[r.key] = r.value })
     const totalDays = parseInt(config.TotalDays || '90')
 
-    // Get today's day of week
-    const todayDayOfWeek = new Date().getDay()
-    const today = new Date().toISOString().slice(0, 10)
+    // Get today's day of week in Korea timezone (0=Sun, 1=Mon, ..., 6=Sat)
+    const koreaTime = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }))
+    const todayDayOfWeek = koreaTime.getDay()
+    const today = koreaTime.toISOString().slice(0, 10)
 
     // Get active subscribers with their personal current_day and active_days
     const { data: subscribers, error: subError } = await supabase

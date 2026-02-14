@@ -40,8 +40,9 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    // Get today's day of week (0=Sun, 1=Mon, ..., 6=Sat)
-    const todayDayOfWeek = new Date().getDay()
+    // Get today's day of week in Korea timezone (0=Sun, 1=Mon, ..., 6=Sat)
+    const koreaTime = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }))
+    const todayDayOfWeek = koreaTime.getDay()
 
     // Get active subscribers with their personal current_day
     const { data: subscribers, error: subError } = await supabase
