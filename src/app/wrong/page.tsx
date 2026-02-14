@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createAuthBrowserClient } from "@/lib/supabase-auth";
 import ExportButtons from "@/components/ExportButtons";
+import PandaLogo from "@/components/PandaLogo";
 
 interface WrongWord {
   Email: string;
@@ -93,7 +94,7 @@ export default function WrongPage() {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
-          <div className="text-5xl mb-4 animate-bounce">🐼</div>
+          <div className="mb-4 animate-bounce"><PandaLogo size={64} variant="thinking" /></div>
           <div className="text-zinc-500" role="status" aria-live="polite">로딩 중...</div>
         </div>
       </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import PandaLogo from '@/components/PandaLogo'
 
 export default function InvitePage() {
   const params = useParams()
@@ -74,7 +75,7 @@ export default function InvitePage() {
       <main className="flex-1 flex items-center justify-center px-4 py-6 relative z-10">
         <div className="w-full max-w-md text-center">
           {/* Panda Icon */}
-          <div className="text-7xl mb-6">🐼</div>
+          <div className="mb-6"><PandaLogo size={80} variant="excited" /></div>
 
           {/* Invitation Message */}
           <h1 className="text-2xl font-bold text-white mb-2">

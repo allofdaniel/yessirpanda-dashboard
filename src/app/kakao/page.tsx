@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
+import Image from 'next/image';
 
 interface Word {
   Word: string;
@@ -74,7 +75,7 @@ function KakaoContent() {
       <div style={styles.container}>
         {/* Header */}
         <div style={styles.header}>
-          <div style={{ fontSize: 40 }}>🐼</div>
+          <Image src="/2.png" alt="옛설판다" width={48} height={48} priority />
           <h1 style={styles.title}>옛설판다</h1>
           <p style={styles.subtitle}>비즈니스 영어 마스터</p>
           <div style={styles.dayBadge}>

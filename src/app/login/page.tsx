@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createAuthBrowserClient } from '@/lib/supabase-auth'
+import PandaLogo from '@/components/PandaLogo'
 
 export default function LoginPage() {
   const searchParams = useSearchParams()
@@ -80,7 +81,7 @@ export default function LoginPage() {
       {/* Header */}
       <header className="relative z-10 w-full px-4 py-4 sm:px-6 sm:py-6 lg:px-20 flex items-center">
         <div className="flex items-center gap-2">
-          <span className="text-xl sm:text-2xl">🐼</span>
+          <PandaLogo size="lg" />
           <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">옛설판다</h2>
         </div>
       </header>
@@ -95,7 +96,7 @@ export default function LoginPage() {
           }}>
           {/* Brand */}
           <div className="flex flex-col items-center text-center mb-6 sm:mb-8">
-            <div className="text-4xl sm:text-5xl mb-2 sm:mb-3">🐼</div>
+            <div className="mb-2 sm:mb-3"><PandaLogo size={64} variant="happy" /></div>
             <h1 className="text-white text-xl sm:text-2xl font-bold tracking-tight mb-1">옛설판다</h1>
             <p className="text-zinc-500 text-xs sm:text-sm px-2">비즈니스 영어의 시작, 옛설판다와 함께하세요</p>
           </div>

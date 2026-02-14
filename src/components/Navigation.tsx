@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createAuthBrowserClient } from '@/lib/supabase-auth'
 import { useState, useEffect } from 'react'
+import PandaLogo from '@/components/PandaLogo'
 
 interface NavProps {
   userEmail: string
@@ -78,7 +79,7 @@ export default function Navigation({ userEmail, userName }: NavProps) {
         {/* Header */}
         <div className={`p-4 flex items-center ${collapsed ? 'justify-center' : 'gap-3 px-6'}`}>
           <div className="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center shadow-lg shadow-violet-600/20 flex-shrink-0">
-            <span className="text-xl">🐼</span>
+            <PandaLogo size="lg" />
           </div>
           {!collapsed && (
             <div>

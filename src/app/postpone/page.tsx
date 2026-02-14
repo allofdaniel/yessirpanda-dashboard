@@ -2,6 +2,7 @@
 
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useState, useEffect, Suspense } from 'react'
+import PandaLogo from '@/components/PandaLogo'
 
 function PostponeContent() {
   const searchParams = useSearchParams()
@@ -58,7 +59,7 @@ function PostponeContent() {
       <div className="card w-full max-w-md p-8 text-center">
         {status === 'loading' && (
           <>
-            <div className="text-5xl mb-4 animate-bounce" role="status" aria-label="로딩 중">🐼</div>
+            <div className="mb-4 animate-bounce" role="status" aria-label="로딩 중"><PandaLogo size={64} variant="thinking" /></div>
             <h1 className="text-white text-xl font-bold mb-2">처리 중...</h1>
             <p className="text-zinc-500" aria-live="polite">잠시만 기다려주세요</p>
           </>
@@ -107,7 +108,7 @@ export default function PostponePage() {
     <Suspense fallback={
       <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
         <div className="text-center">
-          <div className="text-5xl mb-4 animate-bounce" role="status" aria-label="로딩 중">🐼</div>
+          <div className="mb-4 animate-bounce" role="status" aria-label="로딩 중"><PandaLogo size={64} variant="thinking" /></div>
           <p className="text-zinc-500 text-sm">로딩 중...</p>
         </div>
       </div>

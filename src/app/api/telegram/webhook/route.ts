@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     if (text === '/start') {
       if (existingLink?.email) {
         await sendTelegramMessage(chatId,
-          `🐼 <b>옛설판다에 다시 오신 것을 환영합니다!</b>\n\n` +
+          `🦝 <b>옛설판다에 다시 오신 것을 환영합니다!</b>\n\n` +
           `${firstName}님, 이미 연결되어 있습니다.\n` +
           `연결된 이메일: ${existingLink.email}\n\n` +
           `아래 명령어를 사용해보세요:\n` +
@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
         )
       } else {
         await sendTelegramMessage(chatId,
-          `🐼 <b>옛설판다에 오신 것을 환영합니다!</b>\n\n` +
+          `🦝 <b>옛설판다에 오신 것을 환영합니다!</b>\n\n` +
           `${firstName}님, 텔레그램으로 매일 비즈니스 영어를 학습할 수 있어요.\n\n` +
           `먼저 옛설판다 계정과 연결해주세요.\n` +
           `<b>등록된 이메일 주소를 입력해주세요:</b>\n\n` +
@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
     // Handle /help command
     if (text === '/help' || text === '도움말') {
       await sendTelegramMessage(chatId,
-        `🐼 <b>옛설판다 도움말</b>\n\n` +
+        `🦝 <b>옛설판다 도움말</b>\n\n` +
         `${existingLink?.email ? `✅ 연결됨: ${existingLink.email}` : '❌ 미연결'}\n\n` +
         `<b>사용 가능한 명령어:</b>\n` +
         `/start - 시작하기\n` +

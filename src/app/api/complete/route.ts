@@ -66,7 +66,8 @@ function buildHtml(message: string, success: boolean) {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>옛설판다</title></head>
 <body style="margin:0;background:#09090b;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:system-ui,sans-serif;">
 <div style="text-align:center;padding:24px;">
-<p style="color:${color};font-size:16px;font-weight:700;margin:0 0 8px;">🐼 ${message}</p>
+<img src="/2.png" alt="옛설판다" width="48" height="48" style="margin-bottom:12px;">
+<p style="color:${color};font-size:16px;font-weight:700;margin:0 0 8px;">${message}</p>
 <p style="color:#71717a;font-size:12px;margin:0;">잠시 후 자동으로 닫힙니다</p>
 </div>
 <script>setTimeout(function(){window.close();},1500);</script>

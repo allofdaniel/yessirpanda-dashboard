@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
           outputs: [
             {
               textCard: {
-                title: '🐼 옛설판다에 오신 것을 환영합니다!',
+                title: '🦝 옛설판다에 오신 것을 환영합니다!',
                 description: '카카오톡으로 매일 비즈니스 영어를 학습할 수 있어요.\n\n먼저 이메일을 등록해주세요.\n아래 버튼을 누르거나 "등록 이메일주소"를 입력해주세요.',
                 buttons: [
                   {
@@ -423,7 +423,7 @@ function handleHelp(name: string | null) {
       outputs: [
         {
           textCard: {
-            title: `🐼 옛설판다 메뉴`,
+            title: `🦝 옛설판다 메뉴`,
             description: `${name || '학습자'}님, 무엇을 도와드릴까요?\n\n아래 메뉴를 선택하거나 직접 입력해주세요:`,
             buttons: [
               { label: '📚 오늘의 단어', action: 'message', messageText: '오늘의 단어' },

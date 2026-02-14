@@ -146,6 +146,28 @@ export async function GET(request: Request) {
           // Don't fail auth if subscriber creation fails - user can still login
         } else {
           console.info('[Auth Callback] New subscriber created:', { email, provider })
+
+          // Add to Resend audience for email delivery
+          try {
+            const resendRes = await fetch(`${origin}/api/resend/add-contact`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                email,
+                name: user.user_metadata?.full_name || user.user_metadata?.name || '학습자',
+              }),
+            })
+            if (resendRes.ok) {
+              console.info('[Auth Callback] Added to Resend audience:', { email })
+            } else {
+              console.warn('[Auth Callback] Failed to add to Resend (non-critical):', { email })
+            }
+          } catch (resendError) {
+            console.warn('[Auth Callback] Resend error (non-critical):', {
+              email,
+              error: resendError instanceof Error ? resendError.message : String(resendError),
+            })
+          }
         }
       } else {
         // Update channels array if needed

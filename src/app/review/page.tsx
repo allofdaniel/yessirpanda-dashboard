@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { createAuthBrowserClient } from '@/lib/supabase-auth';
 import { useRouter } from 'next/navigation';
+import PandaLogo from '@/components/PandaLogo';
 
 interface Word {
   Day: number;
@@ -251,7 +252,7 @@ export default function ReviewPage() {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
-          <div className="text-5xl mb-4 animate-bounce">🐼</div>
+          <div className="mb-4 animate-bounce"><PandaLogo size={64} variant="thinking" /></div>
           <p className="text-zinc-400">복습 단어를 불러오는 중...</p>
         </div>
       </div>

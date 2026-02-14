@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
+import PandaLogo from '@/components/PandaLogo';
 
 interface Word {
   Day: number;
@@ -106,7 +107,7 @@ function QuizContent() {
     return (
       <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
         <div className="text-center">
-          <div className="text-5xl mb-4 animate-bounce">🐼</div>
+          <div className="mb-4 animate-bounce"><PandaLogo size={64} variant="thinking" /></div>
           <p className="text-zinc-500 text-sm" role="status" aria-live="polite">로딩 중...</p>
         </div>
       </div>
@@ -118,7 +119,7 @@ function QuizContent() {
       <div className="min-h-screen bg-[#09090b]">
         <div className="max-w-md mx-auto px-4 py-6">
           <div className="text-center py-5">
-            <div className="text-5xl mb-2">🐼</div>
+            <div className="mb-2"><PandaLogo size={64} variant="happy" /></div>
             <h1 className="text-zinc-100 text-xl font-bold mb-1">테스트 완료!</h1>
             <p className="text-zinc-500 text-xs">Day {day} 결과</p>
           </div>
@@ -171,7 +172,7 @@ function QuizContent() {
       <div className="max-w-md mx-auto px-3 py-4">
         {/* Header */}
         <div className="text-center py-3">
-          <div className="text-3xl mb-1">🐼</div>
+          <div className="mb-1"><PandaLogo size="lg" /></div>
           <h1 className="text-zinc-100 text-lg font-bold mb-0.5">Day {day} 단어 테스트</h1>
           <p className="text-zinc-500 text-xs">
             단어를 눌러 뜻을 확인하고, 외웠는지 체크하세요
@@ -308,7 +309,7 @@ export default function QuizPage() {
     <Suspense fallback={
       <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
         <div className="text-center">
-          <div className="text-5xl mb-4 animate-bounce">🐼</div>
+          <div className="mb-4 animate-bounce"><PandaLogo size={64} variant="thinking" /></div>
           <p className="text-zinc-500 text-sm">로딩 중...</p>
         </div>
       </div>
