@@ -599,7 +599,12 @@ function SettingsPageContent() {
               <div className="pt-3 border-t border-white/5 flex items-center justify-between">
                 <p className="text-xs text-zinc-500">전화번호 변경</p>
                 <button
-                  onClick={() => setSettings(s => ({ ...s, phone: '', sms_enabled: false }))}
+                  onClick={async () => {
+                    const newSettings = { ...settings, phone: '', sms_enabled: false }
+                    setSettings(newSettings)
+                    await saveSettings(newSettings, true)
+                    showToast('전화번호가 삭제되었습니다')
+                  }}
                   className="text-xs text-zinc-400 hover:text-zinc-300"
                 >
                   변경하기
@@ -688,7 +693,12 @@ function SettingsPageContent() {
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-emerald-400">텔레그램 봇이 연결되어 있습니다</p>
                   <button
-                    onClick={() => setSettings(s => ({ ...s, telegram_chat_id: '', telegram_enabled: false }))}
+                    onClick={async () => {
+                      const newSettings = { ...settings, telegram_chat_id: '', telegram_enabled: false }
+                      setSettings(newSettings)
+                      await saveSettings(newSettings, true)
+                      showToast('텔레그램 연결이 해제되었습니다')
+                    }}
                     className="text-xs text-red-400 hover:text-red-300"
                   >
                     연결 해제
@@ -748,7 +758,12 @@ function SettingsPageContent() {
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-emerald-400">구글 챗 웹훅이 연결되어 있습니다</p>
                   <button
-                    onClick={() => setSettings(s => ({ ...s, google_chat_webhook: '', google_chat_enabled: false }))}
+                    onClick={async () => {
+                      const newSettings = { ...settings, google_chat_webhook: '', google_chat_enabled: false }
+                      setSettings(newSettings)
+                      await saveSettings(newSettings, true)
+                      showToast('구글 챗 연결이 해제되었습니다')
+                    }}
                     className="text-xs text-red-400 hover:text-red-300"
                   >
                     연결 해제

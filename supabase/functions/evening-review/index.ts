@@ -43,6 +43,19 @@ Deno.serve(async (req) => {
     const todayDayOfWeek = koreaTime.getDay()
     const today = koreaTime.toISOString().slice(0, 10)
 
+    // Get current time in Korea timezone (HH:MM format)
+    const currentHour = koreaTime.getHours().toString().padStart(2, '0')
+    const currentMinute = koreaTime.getMinutes().toString().padStart(2, '0')
+
+    // Helper to check if current time is within tolerance of target time
+    const isTimeMatch = (targetTime: string, toleranceMinutes: number = 10) => {
+      const [targetHour, targetMinute] = targetTime.split(':').map(Number)
+      const targetTotal = targetHour * 60 + targetMinute
+      const currentTotal = parseInt(currentHour) * 60 + parseInt(currentMinute)
+      const diff = Math.abs(currentTotal - targetTotal)
+      return diff <= toleranceMinutes || diff >= (24 * 60 - toleranceMinutes)
+    }
+
     // Get active subscribers with their personal current_day and active_days
     const { data: subscribers, error: subError } = await supabase
       .from('subscribers')
@@ -60,7 +73,7 @@ Deno.serve(async (req) => {
     // Get notification settings (all channels)
     const { data: settingsData } = await supabase
       .from('subscriber_settings')
-      .select('email, email_enabled, telegram_enabled, telegram_chat_id, google_chat_enabled, google_chat_webhook')
+      .select('email, email_enabled, telegram_enabled, telegram_chat_id, google_chat_enabled, google_chat_webhook, evening_time')
 
     interface SubscriberSettings {
       email_enabled: boolean
@@ -68,6 +81,7 @@ Deno.serve(async (req) => {
       telegram_chat_id: string | null
       google_chat_enabled: boolean
       google_chat_webhook: string | null
+      evening_time: string
     }
     const settingsMap = new Map<string, SubscriberSettings>()
     settingsData?.forEach((s: {
@@ -77,6 +91,7 @@ Deno.serve(async (req) => {
       telegram_chat_id: string | null
       google_chat_enabled: boolean | null
       google_chat_webhook: string | null
+      evening_time: string | null
     }) => {
       settingsMap.set(s.email, {
         email_enabled: s.email_enabled !== false,
@@ -84,16 +99,18 @@ Deno.serve(async (req) => {
         telegram_chat_id: s.telegram_chat_id,
         google_chat_enabled: s.google_chat_enabled === true,
         google_chat_webhook: s.google_chat_webhook,
+        evening_time: s.evening_time || '21:00',
       })
     })
 
-    // Filter eligible subscribers (any channel enabled)
+    // Filter eligible subscribers (any channel enabled + right day + right time)
     const eligibleSubscribers = (subscribers as Subscriber[]).filter(sub => {
-      const settings = settingsMap.get(sub.email) || { email_enabled: true, telegram_enabled: false, google_chat_enabled: false, telegram_chat_id: null, google_chat_webhook: null }
+      const settings = settingsMap.get(sub.email) || { email_enabled: true, telegram_enabled: false, google_chat_enabled: false, telegram_chat_id: null, google_chat_webhook: null, evening_time: '21:00' }
       const hasAnyChannel = settings.email_enabled || settings.telegram_enabled || settings.google_chat_enabled
       const activeDays = sub.active_days || [1, 2, 3, 4, 5]
       const isTodayActive = activeDays.includes(todayDayOfWeek)
-      return hasAnyChannel && isTodayActive
+      const isRightTime = isTimeMatch(settings.evening_time)
+      return hasAnyChannel && isTodayActive && isRightTime
     })
 
     // Telegram Bot token
