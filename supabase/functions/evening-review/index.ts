@@ -48,7 +48,8 @@ Deno.serve(async (req) => {
     const currentMinute = koreaTime.getMinutes().toString().padStart(2, '0')
 
     // Helper to check if current time is within tolerance of target time
-    const isTimeMatch = (targetTime: string, toleranceMinutes: number = 10) => {
+    // Reduced to 3 minutes to prevent duplicate sends from multiple cron runs
+    const isTimeMatch = (targetTime: string, toleranceMinutes: number = 3) => {
       const [targetHour, targetMinute] = targetTime.split(':').map(Number)
       const targetTotal = targetHour * 60 + targetMinute
       const currentTotal = parseInt(currentHour) * 60 + parseInt(currentMinute)
@@ -153,7 +154,7 @@ Deno.serve(async (req) => {
               cardId: 'evening-review',
               card: {
                 header: {
-                  title: '🐼 옛설판다',
+                  title: '🦝 옛설판다',
                   subtitle: '저녁 복습'
                 },
                 sections: [{
@@ -410,7 +411,7 @@ ${wordList}
   <div style="max-width:480px;margin:0 auto;padding:16px 12px;">
     <!-- Header -->
     <div style="text-align:center;padding:12px 0;">
-      <div style="font-size:32px;margin-bottom:4px;">🐼</div>
+      <div style="font-size:32px;margin-bottom:4px;">🦝</div>
       <h1 style="color:#f4f4f5;font-size:18px;margin:0 0 2px;">옛설판다</h1>
       <p style="color:#71717a;font-size:12px;margin:0;">비즈니스 영어 마스터</p>
     </div>

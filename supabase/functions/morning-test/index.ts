@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
   <div style="max-width:480px;margin:0 auto;padding:24px 16px;">
     <!-- Header -->
     <div style="text-align:center;padding:24px 0;">
-      <div style="font-size:40px;margin-bottom:8px;">🐼</div>
+      <div style="font-size:40px;margin-bottom:8px;">🦝</div>
       <h1 style="color:#f4f4f5;font-size:22px;margin:0 0 4px;">옛설판다</h1>
       <p style="color:#71717a;font-size:13px;margin:0;">비즈니스 영어 마스터</p>
     </div>

@@ -62,7 +62,8 @@ Deno.serve(async (req) => {
     }
 
     // Helper to check if current time is within tolerance of target time
-    const isTimeMatch = (targetTime: string, toleranceMinutes: number = 10) => {
+    // Reduced to 3 minutes to prevent duplicate sends from multiple cron runs
+    const isTimeMatch = (targetTime: string, toleranceMinutes: number = 3) => {
       const [targetHour, targetMinute] = targetTime.split(':').map(Number)
       const targetTotal = targetHour * 60 + targetMinute
       const currentTotal = parseInt(currentHour) * 60 + parseInt(currentMinute)
@@ -153,7 +154,7 @@ Deno.serve(async (req) => {
               cardId: 'lunch-test',
               card: {
                 header: {
-                  title: '🐼 옛설판다',
+                  title: '🦝 옛설판다',
                   subtitle: '점심 테스트'
                 },
                 sections: [{
@@ -244,7 +245,7 @@ Deno.serve(async (req) => {
 <body style="margin:0;padding:0;background:#09090b;font-family:system-ui,sans-serif;">
 <div style="max-width:420px;margin:0 auto;padding:10px 8px;">
 <div style="text-align:center;padding:8px 0;">
-<span style="font-size:24px;">🐼</span>
+<span style="font-size:24px;">🦝</span>
 <span style="color:#f4f4f5;font-size:15px;font-weight:700;vertical-align:middle;margin-left:4px;">Day ${currentDay} 점심 테스트</span>
 </div>
 <p style="color:#a1a1aa;font-size:12px;margin:0 0 6px;text-align:center;">${name}님, 뜻을 떠올려보세요 · 정답은 드래그</p>
