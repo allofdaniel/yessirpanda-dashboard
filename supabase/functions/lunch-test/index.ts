@@ -197,6 +197,19 @@ Deno.serve(async (req) => {
       })
     }
 
+    // Get today's date for deduplication
+    const todayDate = koreaTime.toISOString().slice(0, 10)
+
+    // Check who already received lunch-test today (deduplication)
+    const { data: alreadySent } = await supabase
+      .from('attendance')
+      .select('email')
+      .eq('date', todayDate)
+      .eq('type', 'lunch_test')
+
+    const alreadySentEmails = new Set(alreadySent?.map(r => r.email) || [])
+    const skippedAlreadySent: string[] = []
+
     // Group subscribers by their current_day
     const subscribersByDay = new Map<number, Subscriber[]>()
     for (const sub of eligibleSubscribers) {
@@ -296,6 +309,12 @@ ${rows}
         `✏️ 테스트 하기: ${BASE}/quiz?day=${currentDay}&email=${encodeURIComponent(email)}`
 
       for (const sub of subs) {
+        // Skip if already sent today (deduplication)
+        if (alreadySentEmails.has(sub.email)) {
+          skippedAlreadySent.push(sub.email)
+          continue
+        }
+
         const settings = settingsMap.get(sub.email) || { email_enabled: true, telegram_enabled: false, google_chat_enabled: false, telegram_chat_id: null, google_chat_webhook: null }
         const name = sub.name || '학습자'
 
@@ -338,6 +357,12 @@ ${rows}
           gchatSent = await sendGoogleChat(settings.google_chat_webhook, googleChatText(name, day, sub.email), actionButtons)
         }
 
+        // Record that we sent lunch-test to prevent duplicate sends
+        await supabase.from('attendance').upsert(
+          { email: sub.email, date: todayDate, type: 'lunch_test', completed: true },
+          { onConflict: 'email,date,type' }
+        )
+
         results.push({ email: sub.email, day, email_sent: emailSent, telegram_sent: telegramSent, gchat_sent: gchatSent })
       }
     }
@@ -348,6 +373,7 @@ ${rows}
       eligibleToday: eligibleSubscribers.length,
       sent: results.length,
       skippedNoWords,
+      skippedAlreadySent,
       results
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

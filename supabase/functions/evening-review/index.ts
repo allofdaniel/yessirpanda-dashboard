@@ -197,6 +197,16 @@ Deno.serve(async (req) => {
       })
     }
 
+    // Check who already received evening-review today (deduplication)
+    const { data: alreadySent } = await supabase
+      .from('attendance')
+      .select('email')
+      .eq('date', today)
+      .eq('type', 'evening_review')
+
+    const alreadySentEmails = new Set(alreadySent?.map(r => r.email) || [])
+    const skippedAlreadySent: string[] = []
+
     // Group subscribers by their current_day
     const subscribersByDay = new Map<number, Subscriber[]>()
     for (const sub of eligibleSubscribers) {
@@ -316,6 +326,12 @@ ${wordList}
       const geminiSection = await generateGeminiSection(words, currentDay)
 
       for (const sub of subs) {
+        // Skip if already sent today (deduplication)
+        if (alreadySentEmails.has(sub.email)) {
+          skippedAlreadySent.push(sub.email)
+          continue
+        }
+
         // Check if this subscriber clicked "학습 완료" today
         const { data: lunchAttendance } = await supabase
           .from('attendance')
@@ -555,9 +571,15 @@ ${wordList}
           gchatSent = await sendGoogleChat(settings.google_chat_webhook, googleChatText, actionButtons)
         }
 
-        // Record attendance
+        // Record attendance (for user tracking)
         await supabase.from('attendance').upsert(
           { email: sub.email, date: today, type: 'evening', completed: true },
+          { onConflict: 'email,date,type' }
+        )
+
+        // Record evening_review send (for deduplication)
+        await supabase.from('attendance').upsert(
+          { email: sub.email, date: today, type: 'evening_review', completed: true },
           { onConflict: 'email,date,type' }
         )
 
@@ -592,6 +614,7 @@ ${wordList}
       totalSubscribers: subscribers.length,
       eligibleToday: eligibleSubscribers.length,
       sent: results.length,
+      skippedAlreadySent,
       results,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

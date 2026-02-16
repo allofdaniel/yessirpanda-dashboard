@@ -375,9 +375,22 @@ ${wordList}
 </html>`
     }
 
+    // Get today's date in Korea timezone
+    const todayDate = koreaTime.toISOString().slice(0, 10)
+
+    // Check who already received morning-words today (deduplication)
+    const { data: alreadySent } = await supabase
+      .from('attendance')
+      .select('email')
+      .eq('date', todayDate)
+      .eq('type', 'morning_words')
+
+    const alreadySentEmails = new Set(alreadySent?.map(r => r.email) || [])
+
     // Send notifications to each eligible subscriber
     const results: { email: string; day: number; email_sent: boolean; telegram_sent: boolean; gchat_sent: boolean }[] = []
     const skippedNoWords: string[] = []
+    const skippedAlreadySent: string[] = []
 
     for (const [day, subs] of subscribersByDay) {
       const words = wordsByDay.get(day) || []
@@ -410,6 +423,12 @@ ${wordList}
         `💡 잠시 후 점심 테스트가 발송됩니다!`
 
       for (const sub of subs) {
+        // Skip if already sent today (deduplication)
+        if (alreadySentEmails.has(sub.email)) {
+          skippedAlreadySent.push(sub.email)
+          continue
+        }
+
         const settings = settingsMap.get(sub.email) || { email_enabled: true, telegram_enabled: false, google_chat_enabled: false, telegram_chat_id: null, google_chat_webhook: null }
         const name = sub.name || '학습자'
 
@@ -452,6 +471,12 @@ ${wordList}
           gchatSent = await sendGoogleChat(settings.google_chat_webhook, googleChatText(name, day), actionButtons)
         }
 
+        // Record that we sent morning-words to prevent duplicate sends
+        await supabase.from('attendance').upsert(
+          { email: sub.email, date: todayDate, type: 'morning_words', completed: true },
+          { onConflict: 'email,date,type' }
+        )
+
         results.push({ email: sub.email, day, email_sent: emailSent, telegram_sent: telegramSent, gchat_sent: gchatSent })
       }
     }
@@ -462,6 +487,7 @@ ${wordList}
       eligibleToday: eligibleSubscribers.length,
       sent: results.length,
       skippedNoWords,
+      skippedAlreadySent,
       results
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
