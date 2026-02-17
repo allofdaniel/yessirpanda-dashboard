@@ -1,59 +1,48 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerClient } from '@/lib/supabase'
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerClient } from '@/lib/supabase';
+import { apiError } from '@/lib/api-contract';
+import { checkRateLimit, responseRateLimited } from '@/lib/request-policy';
 
 // GET /api/invite/[code] - Get inviter info by invite code
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ code: string }> }
 ) {
-  const { code } = await params
-
-  if (!code || code.length < 4) {
-    return NextResponse.json({ error: 'Invalid invite code' }, { status: 400 })
+  const rate = checkRateLimit('api:invite:code', request, {
+    maxRequests: 120,
+    windowMs: 60_000,
+  });
+  if (!rate.allowed) {
+    return responseRateLimited(rate.retryAfter || 1, 'api:invite:code');
   }
 
-  const supabase = getServerClient()
+  const { code } = await params;
 
-  // Try to find subscriber by invite_code
+  if (!code || code.length < 4) {
+    return apiError('INVALID_INPUT', 'Invalid invite code');
+  }
+
+  const supabase = getServerClient();
+  const normalizedCode = code.toUpperCase();
+
   const { data: subscriber, error } = await supabase
     .from('subscribers')
     .select('name, email')
-    .eq('invite_code', code.toUpperCase())
-    .single()
+    .eq('invite_code', normalizedCode)
+    .single();
 
-  if (error) {
-    // If invite_code column doesn't exist or no match found,
-    // try to match by email prefix (fallback for ALLOFD style codes)
-    const { data: allSubscribers, error: listError } = await supabase
-      .from('subscribers')
-      .select('name, email')
-
-    if (listError || !allSubscribers) {
-      return NextResponse.json({ error: 'Invite code not found' }, { status: 404 })
+  if (error || !subscriber) {
+    if (error?.code !== 'PGRST116') {
+      console.error('Invite lookup error:', error?.message);
     }
-
-    // Find subscriber whose email starts with the code (case insensitive)
-    const matchedSubscriber = allSubscribers.find(s => {
-      const emailPrefix = s.email.split('@')[0].substring(0, 6).toUpperCase()
-      return emailPrefix === code.toUpperCase()
-    })
-
-    if (matchedSubscriber) {
-      return NextResponse.json({
-        inviter: {
-          name: matchedSubscriber.name || '학습자',
-        },
-        code: code.toUpperCase(),
-      })
-    }
-
-    return NextResponse.json({ error: 'Invite code not found' }, { status: 404 })
+    return apiError('NOT_FOUND', 'Invite code not found');
   }
 
   return NextResponse.json({
     inviter: {
-      name: subscriber.name || '학습자',
+      name: subscriber.name || 'Anonymous',
     },
-    code: code.toUpperCase(),
-  })
+    code: normalizedCode,
+  });
 }
+

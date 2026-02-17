@@ -1,15 +1,9 @@
 import type { Metadata, Viewport } from 'next'
-import { Space_Grotesk } from 'next/font/google'
 import './globals.css'
 import Navigation from '@/components/Navigation'
 import MainContent from '@/components/MainContent'
 import { ServiceWorkerRegister } from '@/components/ServiceWorkerRegister'
 import { createAuthServerClient } from '@/lib/supabase-auth-server'
-
-const spaceGrotesk = Space_Grotesk({
-  subsets: ['latin'],
-  variable: '--font-space-grotesk',
-})
 
 export const metadata: Metadata = {
   title: '옛설판다',
@@ -44,7 +38,7 @@ export default async function RootLayout({
 
   return (
     <html lang="ko">
-      <body className={`${spaceGrotesk.variable} bg-[#09090b] text-zinc-100 grain`}>
+      <body className="bg-[#09090b] text-zinc-100 grain">
         {user && <Navigation userEmail={user.email || ''} userName={user.user_metadata?.name || user.user_metadata?.full_name || '학습자'} />}
         <MainContent hasUser={!!user}>
           {children}

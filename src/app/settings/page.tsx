@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
@@ -75,6 +75,7 @@ function SettingsPageContent() {
   const [linkingProvider, setLinkingProvider] = useState<string | null>(null)
   const [triggeringWorkflow, setTriggeringWorkflow] = useState<string | null>(null)
   const [showAdminTools, setShowAdminTools] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   const supabase = createAuthBrowserClient()
   const searchParams = useSearchParams()
@@ -122,6 +123,15 @@ function SettingsPageContent() {
     if (inviteRes.ok) {
       const inviteData = await inviteRes.json()
       setInviteCode(inviteData.invite_code || '')
+    }
+
+    // Fetch admin status via API
+    const adminRes = await fetch('/api/my/admin')
+    if (adminRes.ok) {
+      const adminData = await adminRes.json()
+      setIsAdmin(Boolean(adminData?.isAdmin))
+    } else {
+      setIsAdmin(false)
     }
 
     // Get linked providers from auth identities
@@ -349,7 +359,11 @@ function SettingsPageContent() {
           return
         }
         // Remove naver_id from user_metadata
-        const { naver_id, naver_name, ...restMetadata } = user.user_metadata
+        const restMetadata: Record<string, unknown> = {
+          ...(user.user_metadata || {}),
+        }
+        delete restMetadata.naver_id
+        delete restMetadata.naver_name
         const { error } = await supabase.auth.updateUser({
           data: restMetadata
         })
@@ -849,40 +863,41 @@ function SettingsPageContent() {
         </div>
       </div>
 
-      {/* Admin Tools (Collapsible) */}
-      <div className="card p-6 space-y-4">
-        <button
-          onClick={() => setShowAdminTools(!showAdminTools)}
-          className="w-full flex items-center justify-between"
-        >
-          <h2 className="text-lg font-bold text-white flex items-center gap-2">
-            <span className="text-violet-400">🛠️</span> 관리자 도구
-          </h2>
-          <span className="text-zinc-500">{showAdminTools ? '▲' : '▼'}</span>
-        </button>
+      {isAdmin && (
+        <div className="card p-6 space-y-4">
+          <button
+            onClick={() => setShowAdminTools(!showAdminTools)}
+            className="w-full flex items-center justify-between"
+          >
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              <span className="text-violet-400">🛠️</span> 관리자 도구
+            </h2>
+            <span className="text-zinc-500">{showAdminTools ? '닫기' : '열기'}</span>
+          </button>
 
-        {showAdminTools && (
-          <div className="space-y-4 pt-4 border-t border-white/5">
-            <p className="text-xs text-zinc-500">수동으로 이메일 워크플로우를 실행합니다</p>
-            <div className="grid grid-cols-3 gap-3">
-              {workflows.map((wf) => (
-                <button
-                  key={wf.id}
-                  onClick={() => handleTriggerWorkflow(wf.id)}
-                  disabled={triggeringWorkflow === wf.id}
-                  className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.05] transition-all text-center disabled:opacity-50"
-                >
-                  <div className="text-2xl mb-2">{wf.emoji}</div>
-                  <p className="text-sm font-medium text-white">{wf.name}</p>
-                  <p className="text-xs text-zinc-500 mt-1">
-                    {triggeringWorkflow === wf.id ? '실행 중...' : wf.description}
-                  </p>
-                </button>
-              ))}
+          {showAdminTools && (
+            <div className="space-y-4 pt-4 border-t border-white/5">
+              <p className="text-xs text-zinc-500">수동으로 이메일 워크플로우를 실행합니다</p>
+              <div className="grid grid-cols-3 gap-3">
+                {workflows.map((wf) => (
+                  <button
+                    key={wf.id}
+                    onClick={() => handleTriggerWorkflow(wf.id)}
+                    disabled={triggeringWorkflow === wf.id}
+                    className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.05] transition-all text-center disabled:opacity-50"
+                  >
+                    <div className="text-2xl mb-2">{wf.emoji}</div>
+                    <p className="text-sm font-medium text-white">{wf.name}</p>
+                    <p className="text-xs text-zinc-500 mt-1">
+                      {triggeringWorkflow === wf.id ? '실행 중...' : wf.description}
+                    </p>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       {/* Save Button */}
       <button

@@ -31,7 +31,6 @@ Deno.serve(async (req) => {
     const config: Record<string, string> = {}
     configData?.forEach((r: { key: string; value: string }) => { config[r.key] = r.value })
     const currentDay = parseInt(config.CurrentDay || '1')
-    const totalDays = parseInt(config.TotalDays || '10')
 
     // Get words for current day
     const { data: words } = await supabase

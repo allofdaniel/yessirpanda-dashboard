@@ -1,36 +1,71 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerClient } from '@/lib/supabase'
+﻿import { NextRequest, NextResponse } from 'next/server';
+import { getServerClient } from '@/lib/supabase';
+import { requireAuth, sanitizeEmail, verifyEmailOwnership } from '@/lib/auth-middleware';
+import {
+  apiError,
+  parseFailureToResponse,
+  parseJsonObject,
+  parseJsonRequest,
+  parseOptionalBoolean,
+  parseEmail,
+} from '@/lib/api-contract';
+import { checkRateLimit, responseRateLimited } from '@/lib/request-policy';
+
+interface PushSubscribeBody {
+  email: string;
+  subscription?: Record<string, unknown>;
+  enabled?: boolean;
+}
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { email, subscription, enabled } = body
+    const authResult = await requireAuth(request);
+    if (authResult instanceof NextResponse) return apiError('UNAUTHORIZED', 'Authentication required');
+    const { user } = authResult;
 
-    if (!email) {
-      return NextResponse.json({ error: 'Email required' }, { status: 400 })
+    const rate = checkRateLimit('api:push:subscribe', request, {
+      maxRequests: 40,
+      windowMs: 60_000,
+    });
+    if (!rate.allowed) {
+      return responseRateLimited(rate.retryAfter || 1, 'api:push:subscribe');
     }
 
-    const supabase = getServerClient()
+    const parsed = await parseJsonRequest<PushSubscribeBody>(request, {
+      email: { required: true, parse: parseEmail },
+      enabled: { required: false, parse: parseOptionalBoolean },
+      subscription: { required: false, parse: parseJsonObject },
+    });
 
-    // If disabling notifications, delete the subscription
+    if (!parsed.success) {
+      return parseFailureToResponse(parsed);
+    }
+
+    const { email, enabled = false, subscription } = parsed.value;
+
+    if (!verifyEmailOwnership(user.email, email)) {
+      return apiError('FORBIDDEN', 'Email does not match authenticated user');
+    }
+
     if (enabled === false) {
-      const { error } = await supabase
+      const { error } = await getServerClient()
         .from('push_subscriptions')
         .delete()
-        .eq('email', email)
+        .eq('email', email);
 
       if (error) {
-        console.error('Error deleting push subscription:', error)
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        console.error('Error deleting push subscription:', error);
+        return apiError('DEPENDENCY_ERROR', error.message);
       }
 
-      return NextResponse.json({ success: true, message: 'Push notifications disabled' })
+      return NextResponse.json({ success: true, message: 'Push notifications disabled' });
     }
 
-    // Save or update subscription
     if (!subscription) {
-      return NextResponse.json({ error: 'Subscription object required' }, { status: 400 })
+      return apiError('INVALID_INPUT', 'subscription is required when enabled is true');
     }
+
+    const supabase = getServerClient();
 
     const { error } = await supabase
       .from('push_subscriptions')
@@ -42,53 +77,58 @@ export async function POST(request: NextRequest) {
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'email' }
-      )
+      );
 
     if (error) {
-      console.error('Error saving push subscription:', error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      console.error('Error saving push subscription:', error);
+      return apiError('DEPENDENCY_ERROR', error.message);
     }
 
-    return NextResponse.json({ success: true, message: 'Push notifications enabled' })
+    return NextResponse.json({ success: true, message: 'Push notifications enabled' });
   } catch (error) {
-    console.error('Error in push subscribe API:', error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    )
+    console.error('Error in push subscribe API:', error);
+    return apiError('DEPENDENCY_ERROR', error instanceof Error ? error.message : 'Unknown error');
   }
 }
 
 export async function GET(request: NextRequest) {
   try {
-    const email = request.nextUrl.searchParams.get('email')
+    const authResult = await requireAuth(request);
+    if (authResult instanceof NextResponse) return apiError('UNAUTHORIZED', 'Authentication required');
+    const { user } = authResult;
 
-    if (!email) {
-      return NextResponse.json({ error: 'Email required' }, { status: 400 })
+    const rate = checkRateLimit('api:push:subscribe:get', request, {
+      maxRequests: 120,
+      windowMs: 60_000,
+    });
+    if (!rate.allowed) {
+      return responseRateLimited(rate.retryAfter || 1, 'api:push:subscribe:get');
     }
 
-    const supabase = getServerClient()
+    const email = sanitizeEmail(request.nextUrl.searchParams.get('email')) || user.email;
+    if (!email || !verifyEmailOwnership(user.email, email)) {
+      return apiError('FORBIDDEN', 'You can only view your own push subscription');
+    }
+
+    const supabase = getServerClient();
     const { data, error } = await supabase
       .from('push_subscriptions')
       .select('enabled, created_at, updated_at')
       .eq('email', email)
-      .single()
+      .single();
 
     if (error) {
       if (error.code === 'PGRST116') {
-        // No subscription found
-        return NextResponse.json({ enabled: false })
+        return NextResponse.json({ enabled: false });
       }
-      console.error('Error fetching push subscription:', error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      console.error('Error fetching push subscription:', error);
+      return apiError('DEPENDENCY_ERROR', error.message);
     }
 
-    return NextResponse.json({ enabled: data.enabled, created_at: data.created_at, updated_at: data.updated_at })
+    return NextResponse.json({ enabled: data.enabled, created_at: data.created_at, updated_at: data.updated_at });
   } catch (error) {
-    console.error('Error in push subscribe GET:', error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    )
+    console.error('Error in push subscribe GET:', error);
+    return apiError('DEPENDENCY_ERROR', error instanceof Error ? error.message : 'Unknown error');
   }
 }
+

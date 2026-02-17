@@ -1,4 +1,5 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+﻿import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { getDashboardUrl } from '../_shared/action-links.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -34,7 +35,7 @@ Deno.serve(async (req) => {
     const naverClientSecret = Deno.env.get('NAVER_CLIENT_SECRET')!
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const dashboardUrl = Deno.env.get('DASHBOARD_URL') || 'https://dashboard-keprojects.vercel.app'
+    const dashboardUrl = getDashboardUrl()
     const functionUrl = `${supabaseUrl}/functions/v1/naver-auth`
 
     // Determine final redirect URL
@@ -142,7 +143,7 @@ Deno.serve(async (req) => {
 
     const naverUser = profileData.response
     const naverEmail = naverUser.email
-    const name = naverUser.nickname || naverUser.name || '네이버 사용자'
+    const name = naverUser.nickname || naverUser.name || '이용자'
     const avatarUrl = naverUser.profile_image
 
     if (!naverEmail) {
@@ -253,7 +254,7 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Naver auth error:', error)
-    const dashboardUrl = Deno.env.get('DASHBOARD_URL') || 'https://dashboard-keprojects.vercel.app'
+    const dashboardUrl = getDashboardUrl()
     // Try to get redirect from URL if available
     try {
       const url = new URL(req.url)
@@ -269,3 +270,4 @@ Deno.serve(async (req) => {
     return Response.redirect(`${dashboardUrl}/login?error=naver_auth_error`, 302)
   }
 })
+

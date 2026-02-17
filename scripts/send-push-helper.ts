@@ -58,11 +58,12 @@ export async function sendPushNotification(
 
     const result = await response.json()
     return result
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error sending push notification:', error)
+    const message = error instanceof Error ? error.message : 'Unknown error'
     return {
       success: false,
-      error: error.message || 'Unknown error',
+      error: message,
     }
   }
 }

@@ -1,79 +1,96 @@
-import { NextRequest, NextResponse } from 'next/server'
+﻿import { NextRequest, NextResponse } from 'next/server'
 import { getServerClient } from '@/lib/supabase'
+import { requireAuth, verifyEmailOwnership, sanitizeEmail, sanitizeDay } from '@/lib/auth-middleware'
+import {
+  apiError,
+  parseFailureToResponse,
+  parseJsonRequest,
+} from '@/lib/api-contract'
+import { checkRateLimit, responseRateLimited } from '@/lib/request-policy'
+
+interface PostponeBody {
+  email?: string;
+  day?: string | number;
+}
+
+function parseOptionalEmail(raw: unknown) {
+  if (raw === undefined) {
+    return { success: true, value: undefined as string | undefined }
+  }
+
+  const parsed = sanitizeEmail(typeof raw === 'string' ? raw : null)
+  if (!parsed) {
+    return { success: false, code: 'INVALID_EMAIL', message: 'Invalid email format' }
+  }
+
+  return { success: true, value: parsed }
+}
+
+function parseOptionalDay(raw: unknown) {
+  if (raw === undefined) {
+    return { success: true, value: undefined as number | undefined }
+  }
+
+  const parsed = sanitizeDay(typeof raw === 'string' || typeof raw === 'number' ? raw : null)
+  if (!parsed) {
+    return { success: false, code: 'INVALID_DAY', message: 'Day must be a positive integer' }
+  }
+
+  return { success: true, value: parsed }
+}
+
+function previewEmail(email: string | null | undefined) {
+  if (!email) return 'unknown'
+  return `${email.substring(0, 3)}***`
+}
 
 // POST: Postpone today's words to tomorrow
 export async function POST(request: NextRequest) {
   try {
-    // Parse request body
-    let email: string
-    let day: number | undefined
-    try {
-      const body = await request.json()
-      email = body.email
-      day = body.day
-    } catch (parseError) {
-      console.warn('[Postpone POST] Invalid JSON:', {
-        error: parseError instanceof Error ? parseError.message : String(parseError),
-      })
-      return NextResponse.json({
-        error: 'Invalid request format',
-        details: 'Body must be valid JSON with email field',
-      }, { status: 400 })
+    const rate = checkRateLimit('api:postpone:post', request, {
+      maxRequests: 60,
+      windowMs: 60_000,
+    });
+    if (!rate.allowed) {
+      return responseRateLimited(rate.retryAfter || 1, 'api:postpone:post');
     }
 
-    // Validate email
-    if (!email || typeof email !== 'string' || !email.trim()) {
-      console.warn('[Postpone POST] Missing or invalid email:', { email })
-      return NextResponse.json({
-        error: 'Email is required',
-        details: 'Please provide a valid email address',
-      }, { status: 400 })
+    const authResult = await requireAuth(request)
+    if (authResult instanceof NextResponse) return apiError('UNAUTHORIZED', 'Authentication required')
+    const { user } = authResult
+
+    const parsed = await parseJsonRequest<PostponeBody>(request, {
+      email: { required: false, parse: parseOptionalEmail },
+      day: { required: false, parse: parseOptionalDay },
+    })
+
+    if (!parsed.success) {
+      return parseFailureToResponse(parsed)
     }
 
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(email.trim())) {
-      console.warn('[Postpone POST] Invalid email format:', { email: email.substring(0, 3) + '***' })
-      return NextResponse.json({
-        error: 'Invalid email format',
-        details: 'Please provide a valid email address',
-      }, { status: 400 })
+    const bodyEmail = parsed.value.email || user.email
+    const requestedDay = parsed.value.day
+    const sanitizedEmail = sanitizeEmail(bodyEmail)
+
+    if (!sanitizedEmail) {
+      return apiError('INVALID_INPUT', 'Email is required')
     }
 
-    // Validate day if provided
-    if (day !== undefined) {
-      if (typeof day !== 'number' || !Number.isInteger(day) || day < 1) {
-        console.warn('[Postpone POST] Invalid day number:', { day, email: email.substring(0, 3) + '***' })
-        return NextResponse.json({
-          error: 'Invalid day number',
-          details: 'Day must be a positive integer',
-        }, { status: 400 })
-      }
-      if (day > 10000) {
-        console.warn('[Postpone POST] Day number unreasonably high:', { day, email: email.substring(0, 3) + '***' })
-        return NextResponse.json({
-          error: 'Invalid day number',
-          details: 'Day number exceeds reasonable bounds',
-        }, { status: 400 })
-      }
+    if (!verifyEmailOwnership(user.email, sanitizedEmail)) {
+      return apiError('FORBIDDEN', 'You can only update your own data')
     }
 
     const supabase = getServerClient()
-
-    // Get current config
     const { data: configData, error: configError } = await supabase
       .from('config')
       .select('key, value')
 
     if (configError) {
       console.error('[Postpone POST] Config fetch failed:', {
-        email: email.substring(0, 3) + '***',
+        email: previewEmail(sanitizedEmail),
         error: configError.message,
       })
-      return NextResponse.json({
-        error: 'Configuration error',
-        details: 'Could not load current day configuration',
-      }, { status: 500 })
+      return apiError('DEPENDENCY_ERROR', 'Could not load current day configuration')
     }
 
     const config: Record<string, string> = {}
@@ -81,92 +98,62 @@ export async function POST(request: NextRequest) {
       config[r.key] = r.value
     })
 
-    const currentDay = day || parseInt(config.CurrentDay || '1', 10)
-
-    // Validate parsed day
-    if (!Number.isInteger(currentDay) || currentDay < 1) {
-      console.error('[Postpone POST] Invalid current day value:', {
-        currentDay,
-        configValue: config.CurrentDay,
-        email: email.substring(0, 3) + '***',
+    const currentDay = requestedDay ?? sanitizeDay(config.CurrentDay || '1')
+    if (!currentDay) {
+      console.error('[Postpone POST] Invalid current day:', {
+        valueFromRequest: requestedDay,
+        valueFromConfig: config.CurrentDay,
+        email: previewEmail(sanitizedEmail),
       })
-      return NextResponse.json({
-        error: 'Invalid day configuration',
-        details: 'Current day is invalid. Please contact support.',
-      }, { status: 500 })
+      return apiError('CONFIG_MISSING', 'Current day is invalid. Please contact support.')
     }
 
-    // Get subscriber
     const { data: subscriber, error: subscriberError } = await supabase
       .from('subscribers')
       .select('id, postponed_days')
-      .eq('email', email.trim())
+      .eq('email', sanitizedEmail)
       .single()
 
     if (subscriberError && subscriberError.code !== 'PGRST116') {
-      // PGRST116 = no rows returned
       console.error('[Postpone POST] Subscriber query failed:', {
-        email: email.substring(0, 3) + '***',
+        email: previewEmail(sanitizedEmail),
         error: subscriberError.message,
         code: subscriberError.code,
       })
-      return NextResponse.json({
-        error: 'Database error',
-        details: 'Could not retrieve subscriber information',
-      }, { status: 500 })
+      return apiError('DEPENDENCY_ERROR', 'Could not retrieve subscriber information')
     }
 
     if (!subscriber) {
-      console.warn('[Postpone POST] Subscriber not found:', { email: email.substring(0, 3) + '***' })
-      return NextResponse.json({
-        error: 'Subscriber not found',
-        details: 'Please log in first to postpone words',
-      }, { status: 404 })
-    }
-
-    // Get postponed days array and check for duplicates
-    const postponedDays = subscriber.postponed_days || []
-    const alreadyPostponed = postponedDays.includes(currentDay)
-
-    if (alreadyPostponed) {
-      console.info('[Postpone POST] Day already postponed:', {
-        email: email.substring(0, 3) + '***',
-        day: currentDay,
+      console.warn('[Postpone POST] Subscriber not found:', {
+        email: previewEmail(sanitizedEmail),
       })
-      return NextResponse.json({
-        error: 'Already postponed',
-        details: `Day ${currentDay} is already scheduled for tomorrow`,
-        postponedDay: currentDay,
-      }, { status: 409 })
+      return apiError('NOT_FOUND', 'Subscriber not found')
     }
 
-    // Add day to postponed array
-    const updatedPostponedDays = [...postponedDays, currentDay]
+    const postponedDays = subscriber.postponed_days || []
+    if (postponedDays.includes(currentDay)) {
+      return apiError('INVALID_INPUT', `Day ${currentDay} is already scheduled for tomorrow`)
+    }
 
-    // Update subscriber
     const { error: updateError } = await supabase
       .from('subscribers')
       .update({
-        postponed_days: updatedPostponedDays,
+        postponed_days: [...postponedDays, currentDay],
         last_postponed_at: new Date().toISOString(),
       })
-      .eq('email', email.trim())
+      .eq('email', sanitizedEmail)
 
     if (updateError) {
       console.error('[Postpone POST] Subscriber update failed:', {
-        email: email.substring(0, 3) + '***',
+        email: previewEmail(sanitizedEmail),
         error: updateError.message,
       })
-      return NextResponse.json({
-        error: 'Update failed',
-        details: 'Could not save postpone status',
-      }, { status: 500 })
+      return apiError('DEPENDENCY_ERROR', 'Could not save postpone status')
     }
 
-    // Also mark today's attendance as postponed (not skipped)
     const today = new Date().toISOString().split('T')[0]
     const { error: attendanceError } = await supabase.from('attendance').upsert({
-      email: email.trim(),
+      email: sanitizedEmail,
       date: today,
       type: 'postponed',
       completed: false,
@@ -175,189 +162,117 @@ export async function POST(request: NextRequest) {
 
     if (attendanceError) {
       console.warn('[Postpone POST] Attendance record failed (non-critical):', {
-        email: email.substring(0, 3) + '***',
+        email: previewEmail(sanitizedEmail),
         date: today,
         error: attendanceError.message,
       })
-      // Don't fail the request - attendance tracking is supplementary
     }
-
-    console.info('[Postpone POST] Day successfully postponed:', {
-      email: email.substring(0, 3) + '***',
-      day: currentDay,
-    })
 
     return NextResponse.json({
       success: true,
-      message: `Day ${currentDay} 단어가 내일로 미뤄졌습니다.`,
+      message: `Day ${currentDay} has been postponed to tomorrow`,
       postponedDay: currentDay,
     })
   } catch (error) {
-    console.error('[Postpone POST] Unexpected error:', {
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    })
-    return NextResponse.json({
-      error: 'Internal server error',
-      details: 'An unexpected error occurred while processing your request',
-    }, { status: 500 })
+    console.error('[Postpone POST] Unexpected error:', error)
+    return apiError('DEPENDENCY_ERROR', 'An unexpected error occurred while processing your request')
   }
 }
 
 // GET: Check if user has postponed days to review
 export async function GET(request: NextRequest) {
   try {
+    const authResult = await requireAuth(request)
+    if (authResult instanceof NextResponse) return apiError('UNAUTHORIZED', 'Authentication required')
+    const { user } = authResult
+
     const { searchParams } = new URL(request.url)
-    const email = searchParams.get('email')
+    const requestedEmail = sanitizeEmail(searchParams.get('email')) || user.email
 
-    // Validate email
-    if (!email || !email.trim()) {
-      console.warn('[Postpone GET] Missing email parameter')
-      return NextResponse.json({
-        error: 'Email is required',
-        details: 'Please provide your email address',
-      }, { status: 400 })
-    }
-
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(email.trim())) {
-      console.warn('[Postpone GET] Invalid email format')
-      return NextResponse.json({
-        error: 'Invalid email format',
-        details: 'Please provide a valid email address',
-      }, { status: 400 })
+    if (!verifyEmailOwnership(user.email, requestedEmail)) {
+      return apiError('FORBIDDEN', 'Forbidden')
     }
 
     const supabase = getServerClient()
-
     const { data: subscriber, error: subscriberError } = await supabase
       .from('subscribers')
       .select('postponed_days')
-      .eq('email', email.trim())
+      .eq('email', requestedEmail)
       .single()
 
     if (subscriberError && subscriberError.code !== 'PGRST116') {
-      // PGRST116 = no rows returned (expected for some cases)
       console.error('[Postpone GET] Subscriber query failed:', {
-        email: email.substring(0, 3) + '***',
+        email: previewEmail(requestedEmail),
         error: subscriberError.message,
         code: subscriberError.code,
       })
-      return NextResponse.json({
-        error: 'Database error',
-        details: 'Could not retrieve postponed days',
-      }, { status: 500 })
+      return apiError('DEPENDENCY_ERROR', 'Could not retrieve postponed days')
     }
 
     if (!subscriber) {
-      console.info('[Postpone GET] Subscriber not found, returning empty list:', {
-        email: email.substring(0, 3) + '***',
-      })
       return NextResponse.json({
         postponedDays: [],
         message: 'No subscriber found',
-      }, { status: 200 })
+      })
     }
 
     const postponedDays = subscriber.postponed_days || []
-
-    // Validate postponed days array
     if (!Array.isArray(postponedDays)) {
-      console.warn('[Postpone GET] Postponed days is not an array, returning empty:', {
-        email: email.substring(0, 3) + '***',
+      console.warn('[Postpone GET] Invalid postponed days data:', {
+        email: previewEmail(requestedEmail),
         type: typeof postponedDays,
       })
-      return NextResponse.json({
-        postponedDays: [],
-        warning: 'Postponed days data was invalid',
-      }, { status: 200 })
+      return NextResponse.json({ postponedDays: [] })
     }
 
-    // Filter out invalid day numbers
     const validDays = postponedDays.filter((d: unknown) => typeof d === 'number' && Number.isInteger(d) && d > 0)
-    if (validDays.length !== postponedDays.length) {
-      console.warn('[Postpone GET] Found invalid day numbers in postponed_days:', {
-        email: email.substring(0, 3) + '***',
-        originalCount: postponedDays.length,
-        validCount: validDays.length,
-      })
-    }
-
-    console.info('[Postpone GET] Retrieved postponed days:', {
-      email: email.substring(0, 3) + '***',
-      count: validDays.length,
-    })
-
-    return NextResponse.json({
-      postponedDays: validDays,
-    }, { status: 200 })
+    return NextResponse.json({ postponedDays: validDays })
   } catch (error) {
     console.error('[Postpone GET] Unexpected error:', {
       error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
     })
-    return NextResponse.json({
-      error: 'Internal server error',
-      details: 'An unexpected error occurred while retrieving postponed days',
-    }, { status: 500 })
+    return apiError('DEPENDENCY_ERROR', 'An unexpected error occurred while retrieving postponed days')
   }
 }
 
 // DELETE: Clear a postponed day after completing it
 export async function DELETE(request: NextRequest) {
   try {
-    // Parse request body
-    let email: string
-    let day: number
-    try {
-      const body = await request.json()
-      email = body.email
-      day = body.day
-    } catch (parseError) {
-      console.warn('[Postpone DELETE] Invalid JSON:', {
-        error: parseError instanceof Error ? parseError.message : String(parseError),
-      })
-      return NextResponse.json({
-        error: 'Invalid request format',
-        details: 'Body must be valid JSON with email and day fields',
-      }, { status: 400 })
+    const rate = checkRateLimit('api:postpone:delete', request, {
+      maxRequests: 60,
+      windowMs: 60_000,
+    });
+    if (!rate.allowed) {
+      return responseRateLimited(rate.retryAfter || 1, 'api:postpone:delete');
     }
 
-    // Validate email
-    if (!email || typeof email !== 'string' || !email.trim()) {
-      console.warn('[Postpone DELETE] Missing or invalid email')
-      return NextResponse.json({
-        error: 'Email is required',
-        details: 'Please provide a valid email address',
-      }, { status: 400 })
+    const authResult = await requireAuth(request)
+    if (authResult instanceof NextResponse) return apiError('UNAUTHORIZED', 'Authentication required')
+    const { user } = authResult
+
+    const parsed = await parseJsonRequest<PostponeBody>(request, {
+      email: { required: false, parse: parseOptionalEmail },
+      day: { required: false, parse: parseOptionalDay },
+    })
+
+    if (!parsed.success) {
+      return parseFailureToResponse(parsed)
     }
 
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(email.trim())) {
-      console.warn('[Postpone DELETE] Invalid email format')
-      return NextResponse.json({
-        error: 'Invalid email format',
-        details: 'Please provide a valid email address',
-      }, { status: 400 })
+    const bodyEmail = parsed.value.email || user.email
+    const sanitizedEmail = sanitizeEmail(bodyEmail)
+    const sanitizedDay = parsed.value.day
+
+    if (!sanitizedEmail) {
+      return apiError('INVALID_INPUT', 'Email is required')
     }
 
-    // Validate day
-    if (day === undefined || day === null) {
-      console.warn('[Postpone DELETE] Missing day parameter')
-      return NextResponse.json({
-        error: 'Day is required',
-        details: 'Please specify which day to clear',
-      }, { status: 400 })
+    if (!verifyEmailOwnership(user.email, sanitizedEmail)) {
+      return apiError('FORBIDDEN', 'You can only update your own data')
     }
 
-    if (typeof day !== 'number' || !Number.isInteger(day) || day < 1) {
-      console.warn('[Postpone DELETE] Invalid day number:', { day })
-      return NextResponse.json({
-        error: 'Invalid day number',
-        details: 'Day must be a positive integer',
-      }, { status: 400 })
+    if (!sanitizedDay) {
+      return apiError('INVALID_INPUT', 'Day is required')
     }
 
     const supabase = getServerClient()
@@ -365,79 +280,50 @@ export async function DELETE(request: NextRequest) {
     const { data: subscriber, error: subscriberError } = await supabase
       .from('subscribers')
       .select('postponed_days')
-      .eq('email', email.trim())
+      .eq('email', sanitizedEmail)
       .single()
 
     if (subscriberError && subscriberError.code !== 'PGRST116') {
       console.error('[Postpone DELETE] Subscriber query failed:', {
-        email: email.substring(0, 3) + '***',
+        email: previewEmail(sanitizedEmail),
         error: subscriberError.message,
       })
-      return NextResponse.json({
-        error: 'Database error',
-        details: 'Could not retrieve subscriber information',
-      }, { status: 500 })
+      return apiError('DEPENDENCY_ERROR', 'Could not retrieve subscriber information')
     }
 
     if (!subscriber) {
-      console.warn('[Postpone DELETE] Subscriber not found:', { email: email.substring(0, 3) + '***' })
-      return NextResponse.json({
-        error: 'Subscriber not found',
-        details: 'Could not find the specified subscriber',
-      }, { status: 404 })
+      return apiError('NOT_FOUND', 'Subscriber not found')
     }
 
-    // Check if day is in postponed_days
-    const postponedDays = (subscriber.postponed_days || [])
-    if (!postponedDays.includes(day)) {
-      console.info('[Postpone DELETE] Day not in postponed list:', {
-        email: email.substring(0, 3) + '***',
-        day,
-        postponedDays,
-      })
-      return NextResponse.json({
-        error: 'Day not postponed',
-        details: `Day ${day} is not in your postponed list`,
-      }, { status: 409 })
+    const postponedDays = subscriber.postponed_days || []
+    if (!postponedDays.includes(sanitizedDay)) {
+      return apiError('INVALID_INPUT', `Day ${sanitizedDay} is not in your postponed list`)
     }
 
-    // Remove the day from postponed_days
-    const updatedPostponedDays = postponedDays.filter((d: number) => d !== day)
-
+    const updatedPostponedDays = postponedDays.filter((d: number) => d !== sanitizedDay)
     const { error: updateError } = await supabase
       .from('subscribers')
       .update({ postponed_days: updatedPostponedDays })
-      .eq('email', email.trim())
+      .eq('email', sanitizedEmail)
 
     if (updateError) {
       console.error('[Postpone DELETE] Update failed:', {
-        email: email.substring(0, 3) + '***',
-        day,
+        email: previewEmail(sanitizedEmail),
+        day: sanitizedDay,
         error: updateError.message,
       })
-      return NextResponse.json({
-        error: 'Update failed',
-        details: 'Could not remove day from postponed list',
-      }, { status: 500 })
+      return apiError('DEPENDENCY_ERROR', 'Could not remove day from postponed list')
     }
-
-    console.info('[Postpone DELETE] Day successfully cleared:', {
-      email: email.substring(0, 3) + '***',
-      day,
-    })
 
     return NextResponse.json({
       success: true,
-      message: `Day ${day} 학습 완료!`,
-    }, { status: 200 })
+      message: `Day ${sanitizedDay} removed`,
+    })
   } catch (error) {
     console.error('[Postpone DELETE] Unexpected error:', {
       error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
     })
-    return NextResponse.json({
-      error: 'Internal server error',
-      details: 'An unexpected error occurred while processing your request',
-    }, { status: 500 })
+    return apiError('DEPENDENCY_ERROR', 'An unexpected error occurred while processing your request')
   }
 }
+

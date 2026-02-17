@@ -1,11 +1,13 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+﻿import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { buildCompleteActionUrl, getDashboardUrl } from '../_shared/action-links.ts'
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const DASHBOARD_URL = 'https://dashboard-keprojects.vercel.app'
+
 
 interface Subscriber {
   email: string
@@ -31,6 +33,7 @@ Deno.serve(async (req) => {
     const geminiKey = Deno.env.get('GEMINI_API_KEY')!
 
     const supabase = createClient(supabaseUrl, supabaseKey)
+    const dashboardUrl = getDashboardUrl()
 
     // Get config for total days
     const { data: configData } = await supabase.from('config').select('key, value')
@@ -353,6 +356,7 @@ ${wordList}
           .limit(20)
 
         // Build quiz status section
+        const completeActionUrl = completedLunch ? '' : await buildCompleteActionUrl(sub.email, currentDay)
         let quizStatusSection = ''
         if (completedLunch) {
           quizStatusSection = `
@@ -362,13 +366,12 @@ ${wordList}
             </div>
           `
         } else {
-          const completeLink = `${DASHBOARD_URL}/api/complete?email=${encodeURIComponent(sub.email)}&day=${currentDay}`
           quizStatusSection = `
             <div style="background:#18181b;border:1px solid #f59e0b;border-radius:10px;padding:14px;margin-bottom:12px;text-align:center;">
               <div style="font-size:24px;margin-bottom:4px;">⚠️</div>
               <p style="color:#f59e0b;font-size:14px;font-weight:600;margin:0 0 4px;">아직 학습 완료를 안 하셨어요!</p>
               <p style="color:#a1a1aa;font-size:12px;margin:0 0 8px;">완료 버튼을 눌러야 다음 Day로 진행됩니다</p>
-              <a href="${completeLink}" style="display:inline-block;background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;text-decoration:none;padding:8px 24px;border-radius:8px;font-size:13px;font-weight:700;">
+              <a href="${completeActionUrl}" style="display:inline-block;background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;text-decoration:none;padding:8px 24px;border-radius:8px;font-size:13px;font-weight:700;">
                 학습 완료하기
               </a>
             </div>
@@ -496,7 +499,7 @@ ${wordList}
 
     <!-- Dashboard Link -->
     <div style="text-align:center;margin:12px 0;">
-      <a href="${DASHBOARD_URL}/login" style="display:inline-block;background:#8B5CF6;color:#fff;text-decoration:none;padding:10px 28px;border-radius:8px;font-size:13px;font-weight:600;">📊 내 학습 관리</a>
+      <a href="${dashboardUrl}/login" style="display:inline-block;background:#8B5CF6;color:#fff;text-decoration:none;padding:10px 28px;border-radius:8px;font-size:13px;font-weight:600;">📊 내 학습 관리</a>
     </div>
 
     <!-- Footer -->
@@ -523,7 +526,7 @@ ${wordList}
           (completedLunch ? `✅ 학습 완료\n` : `⚠️ 학습 미완료\n`) +
           (wrongCount > 0 ? `❌ 복습 필요 단어: ${wrongCount}개\n\n` : `🎉 오답 없음!\n\n`) +
           `📚 전체 진도: Day ${currentDay}/${totalDays} (${Math.round((currentDay / totalDays) * 100)}%)\n\n` +
-          `📊 자세히 보기: ${DASHBOARD_URL}/stats`
+        `📊 자세히 보기: ${dashboardUrl}/stats`
 
         const googleChatText =
           `🌙 *Day ${currentDay} 저녁 복습*\n\n` +
@@ -553,12 +556,10 @@ ${wordList}
 
         // Build action buttons for evening review
         const actionButtons = completedLunch
-          ? [
-              { text: '📊 학습 관리', url: `${DASHBOARD_URL}/login` }
-            ]
+          ? [{ text: '📊 학습 관리', url: `${dashboardUrl}/login` }]
           : [
-              { text: '✅ 학습 완료', url: `${DASHBOARD_URL}/api/complete?email=${encodeURIComponent(sub.email)}&day=${currentDay}` },
-              { text: '📊 학습 관리', url: `${DASHBOARD_URL}/login` }
+              { text: '✅ 학습 완료', url: completeActionUrl },
+              { text: '📊 학습 관리', url: `${dashboardUrl}/login` },
             ]
 
         // Send Telegram
@@ -627,3 +628,4 @@ ${wordList}
     })
   }
 })
+

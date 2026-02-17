@@ -5,6 +5,41 @@ import type {
   Config, Word, WrongWord, Result, Attendance, Subscriber, QuizResult, QuizAnswer,
 } from './types';
 
+type PagingOptions = { limit?: number; offset?: number };
+
+const DEFAULT_PAGE_LIMITS = {
+  WRONG_WORDS: 100,
+  RESULTS: 100,
+  ATTENDANCE: 90,
+} as const;
+
+const MAX_PAGE_LIMIT = 500;
+
+function normalizeLimit(value: number | undefined, fallback: number): number {
+  if (!Number.isInteger(value) || value <= 0) {
+    return fallback;
+  }
+
+  return Math.min(value, MAX_PAGE_LIMIT);
+}
+
+function normalizeOffset(value: number | undefined): number {
+  if (!Number.isInteger(value) || value < 0) {
+    return 0;
+  }
+  return value;
+}
+
+function applyPaging(
+  query: ReturnType<ReturnType<typeof getServerClient>['from']>,
+  options: PagingOptions,
+  defaultLimit: number,
+): ReturnType<ReturnType<typeof getServerClient>['from']> {
+  const limit = normalizeLimit(options.limit, defaultLimit);
+  const offset = normalizeOffset(options.offset);
+  return query.range(offset, offset + limit - 1);
+}
+
 // Config operations
 export async function getConfig(): Promise<Config> {
   const supabase = getServerClient();
@@ -71,14 +106,11 @@ export async function getWrongWords(
   options?: { limit?: number; offset?: number; mastered?: boolean }
 ): Promise<WrongWord[]> {
   const supabase = getServerClient();
-  const limit = options?.limit ?? 100; // Default limit to prevent unbounded queries
-  const offset = options?.offset ?? 0;
-
   let query = supabase
     .from('wrong_words')
     .select('*')
-    .range(offset, offset + limit - 1)
     .order('last_wrong', { ascending: false });
+  query = applyPaging(query, options ?? {}, DEFAULT_PAGE_LIMITS.WRONG_WORDS);
 
   if (email) {
     query = query.eq('email', email);
@@ -135,14 +167,11 @@ export async function getResults(
   options?: { limit?: number; offset?: number }
 ): Promise<Result[]> {
   const supabase = getServerClient();
-  const limit = options?.limit ?? 100; // Default limit to prevent unbounded queries
-  const offset = options?.offset ?? 0;
-
   let query = supabase
     .from('results')
     .select('*')
-    .range(offset, offset + limit - 1)
     .order('timestamp', { ascending: false });
+  query = applyPaging(query, options ?? {}, DEFAULT_PAGE_LIMITS.RESULTS);
 
   if (email) {
     query = query.eq('email', email);
@@ -174,14 +203,11 @@ export async function getAttendance(
   options?: { limit?: number; offset?: number; fromDate?: string; toDate?: string }
 ): Promise<Attendance[]> {
   const supabase = getServerClient();
-  const limit = options?.limit ?? 90; // Default to 90 days (3 months)
-  const offset = options?.offset ?? 0;
-
   let query = supabase
     .from('attendance')
     .select('*')
-    .range(offset, offset + limit - 1)
     .order('date', { ascending: false });
+  query = applyPaging(query, options ?? {}, DEFAULT_PAGE_LIMITS.ATTENDANCE);
 
   if (email) {
     query = query.eq('email', email);

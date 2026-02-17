@@ -1,10 +1,39 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import {
+  checkRateLimit,
+  cacheRedirectResponse,
+  getReplay,
+  hashPayload,
+  replayToResponse,
+  responseRateLimited,
+} from '@/lib/request-policy'
 
 export async function GET(request: Request) {
+  const { origin } = new URL(request.url)
+  const replayKey = hashPayload(request.url)
+  const replay = getReplay('auth:callback', replayKey)
+
+  if (replay) {
+    return replayToResponse(replay)
+  }
+
+  const rate = checkRateLimit('auth:callback', request, {
+    maxRequests: 120,
+    windowMs: 60_000,
+  })
+  if (!rate.allowed) {
+    return responseRateLimited(rate.retryAfter || 1, 'auth:callback')
+  }
+
+  const sendRedirect = (location: string) => {
+    cacheRedirectResponse('auth:callback', replayKey, 307, location)
+    return NextResponse.redirect(location)
+  }
+
   try {
-    const { searchParams, origin } = new URL(request.url)
+    const { searchParams } = new URL(request.url)
     const code = searchParams.get('code')
     const token = searchParams.get('token')
     const tokenType = searchParams.get('type')
@@ -14,19 +43,19 @@ export async function GET(request: Request) {
 
     // Handle token-based auth (Naver via magic link)
     if (token && tokenType) {
-      return NextResponse.redirect(`${origin}/auth/verify?token=${token}&type=${tokenType}&next=${next}`)
+      return sendRedirect(`${origin}/auth/verify?token=${token}&type=${tokenType}&next=${next}`)
     }
 
     // Validate code presence for OAuth
     if (!code) {
       console.warn('[Auth Callback] Missing authentication code')
-      return NextResponse.redirect(`${origin}/login?error=missing_code`)
+      return sendRedirect(`${origin}/login?error=missing_code`)
     }
 
     // Validate environment variables
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
       console.error('[Auth Callback] Missing Supabase configuration')
-      return NextResponse.redirect(`${origin}/login?error=config_error`)
+      return sendRedirect(`${origin}/login?error=config_error`)
     }
 
     const cookieStore = await cookies()
@@ -63,12 +92,12 @@ export async function GET(request: Request) {
         error: exchangeError.message,
         code: exchangeError.status,
       })
-      return NextResponse.redirect(`${origin}/login?error=exchange_failed`)
+      return sendRedirect(`${origin}/login?error=exchange_failed`)
     }
 
     if (!data?.user) {
       console.error('[Auth Callback] No user returned from code exchange')
-      return NextResponse.redirect(`${origin}/login?error=no_user`)
+      return sendRedirect(`${origin}/login?error=no_user`)
     }
 
     const user = data.user
@@ -90,7 +119,7 @@ export async function GET(request: Request) {
     // Validate email
     if (!email) {
       console.error('[Auth Callback] User has no email:', { userId: user.id, provider })
-      return NextResponse.redirect(`${origin}/login?error=no_email`)
+      return sendRedirect(`${origin}/login?error=no_email`)
     }
 
     // Validate provider
@@ -115,17 +144,19 @@ export async function GET(request: Request) {
         // Find referrer email if refCode provided
         let referrerEmail: string | null = null
         if (refCode) {
-          // Try to find referrer by invite_code or email prefix
+          const normalizedRefCode = refCode.toUpperCase()
+
+          // Try to find referrer by invite code only (prevents enumeration)
           const { data: referrer } = await supabase
             .from('subscribers')
             .select('email')
-            .or(`invite_code.eq.${refCode.toUpperCase()},email.ilike.${refCode.toLowerCase()}%`)
+            .eq('invite_code', normalizedRefCode)
             .limit(1)
             .single()
 
           if (referrer?.email) {
             referrerEmail = referrer.email
-            console.info('[Auth Callback] Referrer found:', { refCode, referrerEmail })
+            console.info('[Auth Callback] Referrer found:', { refCode: normalizedRefCode, referrerEmail })
           }
         }
 
@@ -149,9 +180,15 @@ export async function GET(request: Request) {
 
           // Add to Resend audience for email delivery
           try {
+            const resendInternalSecret = process.env.RESEND_INTERNAL_SECRET || ''
             const resendRes = await fetch(`${origin}/api/resend/add-contact`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: resendInternalSecret
+                ? {
+                    'Content-Type': 'application/json',
+                    'x-resend-internal-secret': resendInternalSecret,
+                  }
+                : { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 email,
                 name: user.user_metadata?.full_name || user.user_metadata?.name || '학습자',
@@ -199,12 +236,15 @@ export async function GET(request: Request) {
       // If Kakao login, link to kakao_users for chatbot
       if (provider === 'kakao' && user.user_metadata?.provider_id) {
         try {
-          const { error: upsertError } = await supabase.from('kakao_users').upsert({
-            kakao_user_id: user.user_metadata.provider_id,
-            email,
-            name: user.user_metadata?.full_name || user.user_metadata?.name || '학습자',
-            last_active: new Date().toISOString(),
-          }, { onConflict: 'kakao_user_id' })
+          const { error: upsertError } = await supabase.from('kakao_users').upsert(
+            {
+              kakao_user_id: user.user_metadata.provider_id,
+              email,
+              name: user.user_metadata?.full_name || user.user_metadata?.name || '학습자',
+              last_active: new Date().toISOString(),
+            },
+            { onConflict: 'kakao_user_id' }
+          )
 
           if (upsertError) {
             console.warn('[Auth Callback] Failed to upsert Kakao user (non-critical):', {
@@ -247,17 +287,17 @@ export async function GET(request: Request) {
       new URL(redirectUrl)
     } catch {
       console.warn('[Auth Callback] Invalid redirect URL, using fallback:', { attemptedUrl: redirectUrl })
-      return NextResponse.redirect(`${origin}/`)
+      return sendRedirect(`${origin}/`)
     }
 
     console.info('[Auth Callback] Authentication successful:', { email, provider, isLinkOperation })
-    return NextResponse.redirect(redirectUrl)
+    return sendRedirect(redirectUrl)
   } catch (error) {
     console.error('[Auth Callback] Unexpected error:', {
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
     })
-    const { origin } = new URL(request.url)
-    return NextResponse.redirect(`${origin}/login?error=unexpected`)
+    return sendRedirect(`${origin}/login?error=unexpected`)
   }
 }
+

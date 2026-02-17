@@ -1,21 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerClient } from '@/lib/supabase'
 import { requireAuth, verifyEmailOwnership, sanitizeEmail } from '@/lib/auth-middleware'
+import { apiError } from '@/lib/api-contract'
+import { checkRateLimit, responseRateLimited } from '@/lib/request-policy'
 
 // GET /api/my/invite - Get or generate user's invite code
 export async function GET(request: NextRequest) {
   try {
+    const rate = checkRateLimit('api:my:invite', request, {
+      maxRequests: 120,
+      windowMs: 60_000,
+    })
+    if (!rate.allowed) {
+      return responseRateLimited(rate.retryAfter || 1, 'api:my:invite')
+    }
+
     const authResult = await requireAuth(request)
-    if (authResult instanceof NextResponse) return authResult
+    if (authResult instanceof NextResponse) return apiError('UNAUTHORIZED', 'Authentication required')
     const { user } = authResult
 
     const emailParam = request.nextUrl.searchParams.get('email')
     const email = sanitizeEmail(emailParam || user.email)
 
-    if (!email) return NextResponse.json({ error: 'Valid email required' }, { status: 400 })
+    if (!email) return apiError('INVALID_INPUT', 'Valid email required')
 
     if (!verifyEmailOwnership(user.email, email)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      return apiError('FORBIDDEN', 'You can only access your own invite code')
     }
 
     const supabase = getServerClient()
@@ -59,6 +69,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ invite_code: subscriber.invite_code })
   } catch (err) {
     console.error('Invite API error:', err)
-    return NextResponse.json({ invite_code: null, error: 'Failed to get invite code' }, { status: 200 })
+    return apiError(
+      'DEPENDENCY_ERROR',
+      'Failed to get invite code',
+      process.env.NODE_ENV === 'development'
+        ? { details: err instanceof Error ? err.message : String(err) }
+        : undefined,
+    )
   }
 }
+

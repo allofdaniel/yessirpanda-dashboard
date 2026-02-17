@@ -22,8 +22,24 @@ interface NotificationRequest {
   emails?: string[]
 }
 
+interface PushSubscriptionPayload {
+  [key: string]: unknown
+  endpoint: string
+}
+
+interface SendPushResult {
+  success: boolean
+  invalid?: boolean
+  error?: string
+}
+
+type SubscriptionRow = {
+  email: string
+  subscription: PushSubscriptionPayload
+}
+
 // Helper function to send push notification using web-push protocol
-async function sendPushNotification(subscription: any, payload: PushPayload) {
+async function sendPushNotification(subscription: PushSubscriptionPayload, payload: PushPayload): Promise<SendPushResult> {
   const vapidPublicKey = Deno.env.get('VAPID_PUBLIC_KEY')
   const vapidPrivateKey = Deno.env.get('VAPID_PRIVATE_KEY')
   const vapidEmail = Deno.env.get('VAPID_EMAIL') || 'mailto:admin@yessirpanda.com'
@@ -40,13 +56,17 @@ async function sendPushNotification(subscription: any, payload: PushPayload) {
   try {
     await webpush.sendNotification(subscription, JSON.stringify(payload))
     return { success: true }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error sending push notification:', error)
+    const statusCode = typeof error === 'object' && error !== null && 'statusCode' in error
+      ? (error as { statusCode?: number }).statusCode
+      : undefined
+    const message = error instanceof Error ? error.message : 'Unknown push notification error'
     // If subscription is invalid (410 Gone), mark it for deletion
-    if (error.statusCode === 410) {
+    if (statusCode === 410) {
       return { success: false, invalid: true }
     }
-    return { success: false, error: error.message }
+    return { success: false, error: message }
   }
 }
 
@@ -120,7 +140,7 @@ serve(async (req) => {
         .eq('enabled', true)
 
       if (allSubscriptions) {
-        targetEmails = allSubscriptions.map((s: any) => s.email)
+        targetEmails = allSubscriptions.map((s: { email: string }) => s.email)
       }
     }
 
@@ -154,7 +174,7 @@ serve(async (req) => {
 
     // Send push notifications
     const results = await Promise.allSettled(
-      subscriptions.map(async (sub: any) => {
+      subscriptions.map(async (sub: SubscriptionRow) => {
         const result = await sendPushNotification(sub.subscription, notificationPayload)
 
         // If subscription is invalid, delete it
@@ -169,7 +189,9 @@ serve(async (req) => {
       })
     )
 
-    const successful = results.filter((r) => r.status === 'fulfilled' && (r.value as any).success).length
+    const successful = results.reduce((count, result) => (
+      result.status === 'fulfilled' && result.value.success ? count + 1 : count
+    ), 0)
     const failed = results.length - successful
 
     return new Response(
@@ -182,10 +204,11 @@ serve(async (req) => {
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in send-push function:', error)
+    const message = error instanceof Error ? error.message : 'Unknown error'
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     )
   }

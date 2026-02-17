@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createAuthBrowserClient } from '@/lib/supabase-auth'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import PandaLogo from '@/components/PandaLogo'
 
 interface NavProps {
@@ -43,13 +43,10 @@ function NavIcon({ icon, className }: { icon: string; className?: string }) {
 export default function Navigation({ userEmail, userName }: NavProps) {
   const pathname = usePathname()
   const router = useRouter()
-  const [collapsed, setCollapsed] = useState(false)
-
-  // Load collapsed state from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem('sidebarCollapsed')
-    if (saved === 'true') setCollapsed(true)
-  }, [])
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return localStorage.getItem('sidebarCollapsed') === 'true'
+  })
 
   // Save collapsed state to localStorage
   const toggleCollapse = () => {

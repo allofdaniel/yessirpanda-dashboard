@@ -1,38 +1,62 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerClient } from '@/lib/supabase'
-import { requireAuth, verifyEmailOwnership, sanitizeEmail } from '@/lib/auth-middleware'
+﻿import { NextRequest, NextResponse } from 'next/server';
+import { getServerClient } from '@/lib/supabase';
+import {
+  apiError,
+  parseFailureToResponse,
+  parseJsonRequest,
+  parseEmail,
+  parseStatus,
+} from '@/lib/api-contract';
+import { requireAuth, verifyEmailOwnership } from '@/lib/auth-middleware';
+import { checkRateLimit, responseRateLimited } from '@/lib/request-policy';
 
-// POST /api/my/status - Update user's subscription status
+type StatusUpdateBody = {
+  email?: string;
+  status: 'active' | 'paused';
+};
+
 export async function POST(request: NextRequest) {
-  const authResult = await requireAuth(request)
-  if (authResult instanceof NextResponse) return authResult
-  const { user } = authResult
-
-  const body = await request.json()
-  const { email, status } = body
-
-  const sanitizedEmail = sanitizeEmail(email || user.email)
-  if (!sanitizedEmail) return NextResponse.json({ error: 'Valid email required' }, { status: 400 })
-
-  if (!verifyEmailOwnership(user.email, sanitizedEmail)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const rate = checkRateLimit('api:my:status', request, {
+    maxRequests: 120,
+    windowMs: 60_000,
+  });
+  if (!rate.allowed) {
+    return responseRateLimited(rate.retryAfter || 1, 'api:my:status');
   }
 
-  // Validate status
-  if (!['active', 'paused'].includes(status)) {
-    return NextResponse.json({ error: 'Invalid status. Use "active" or "paused"' }, { status: 400 })
+  const authResult = await requireAuth(request);
+  if (authResult instanceof NextResponse) return apiError('UNAUTHORIZED', 'Authentication required');
+  const { user } = authResult;
+
+  const parsed = await parseJsonRequest<StatusUpdateBody>(request, {
+    email: {
+      required: false,
+      parse: parseEmail,
+    },
+    status: { required: true, parse: parseStatus },
+  });
+
+  if (!parsed.success) {
+    return parseFailureToResponse(parsed);
   }
 
-  const supabase = getServerClient()
+  const payload = parsed.value;
+  const email = payload.email || user.email;
 
+  if (!verifyEmailOwnership(user.email, email)) {
+    return apiError('FORBIDDEN', 'Forbidden', 'Not allowed to change this user status');
+  }
+
+  const supabase = getServerClient();
   const { error } = await supabase
     .from('subscribers')
-    .update({ status })
-    .eq('email', sanitizedEmail)
+    .update({ status: payload.status })
+    .eq('email', email);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return apiError('DEPENDENCY_ERROR', error.message);
   }
 
-  return NextResponse.json({ success: true, status })
+  return NextResponse.json({ success: true, status: payload.status });
 }
+

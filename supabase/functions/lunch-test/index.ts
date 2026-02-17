@@ -1,11 +1,12 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+﻿import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { buildCompleteActionUrl, buildRelearnActionUrl, getDashboardUrl } from '../_shared/action-links.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const BASE = 'https://dashboard-keprojects.vercel.app'
+ 
 
 interface Subscriber {
   email: string
@@ -39,6 +40,7 @@ Deno.serve(async (req) => {
     const resendKey = Deno.env.get('RESEND_API_KEY')!
 
     const supabase = createClient(supabaseUrl, supabaseKey)
+    const dashboardUrl = getDashboardUrl()
 
     // Get today's day of week in Korea timezone (0=Sun, 1=Mon, ..., 6=Sat)
     const koreaTime = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }))
@@ -239,13 +241,23 @@ Deno.serve(async (req) => {
       wordsByDay.get(w.day)!.push({ word: w.word, meaning: w.meaning })
     })
 
-    const buildHtml = (name: string, email: string, currentDay: number, words: Word[]) => {
-      const e = encodeURIComponent(email)
-      const completeLink = `${BASE}/api/complete?email=${e}&day=${currentDay}`
+    const buildHtml = async (
+      name: string,
+      email: string,
+      currentDay: number,
+      words: Word[],
+      completeLink: string
+    ) => {
+      const encodedEmail = encodeURIComponent(email)
       const shuffled = shuffleArray(words)
+      const relearnLinks = await Promise.all(
+        shuffled.map((w) =>
+          buildRelearnActionUrl(email, currentDay, w.word, w.meaning)
+        )
+      )
 
       const rows = shuffled.map((w, i) => {
-        const relearnLink = `${BASE}/api/relearn?email=${e}&day=${currentDay}&word=${encodeURIComponent(w.word)}&meaning=${encodeURIComponent(w.meaning)}`
+        const relearnLink = relearnLinks[i]
         return `<tr>
 <td style="padding:4px 6px;color:#71717a;font-size:11px;border-bottom:1px solid #1e1e1e;text-align:center;width:20px;">${i + 1}</td>
 <td style="padding:4px 6px;color:#f4f4f5;font-size:13px;font-weight:600;border-bottom:1px solid #1e1e1e;">${w.word}</td>
@@ -275,8 +287,8 @@ Deno.serve(async (req) => {
 ${rows}
 </table>
 <div style="text-align:center;margin:10px 0 6px;">
-<a href="${BASE}/login" style="display:inline-block;background:#8B5CF6;color:#fff;text-decoration:none;padding:8px 20px;border-radius:8px;font-size:12px;font-weight:600;margin-right:8px;">📊 내 학습 관리</a>
-<a href="${BASE}/postpone?email=${e}&day=${currentDay}" style="display:inline-block;background:#ec4899;color:#fff;text-decoration:none;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:600;">⏰ 내일로 미루기</a>
+<a href="${dashboardUrl}/login" style="display:inline-block;background:#8B5CF6;color:#fff;text-decoration:none;padding:8px 20px;border-radius:8px;font-size:12px;font-weight:600;margin-right:8px;">📊 내 학습 관리</a>
+<a href="${dashboardUrl}/postpone?email=${encodedEmail}&day=${currentDay}" style="display:inline-block;background:#ec4899;color:#fff;text-decoration:none;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:600;">⏰ 내일로 미루기</a>
 </div>
 <p style="text-align:center;color:#3f3f46;font-size:9px;margin:6px 0 0;">옛설판다 · 비즈니스 영어</p>
 </div>
@@ -300,13 +312,13 @@ ${rows}
         `🍽️ <b>Day ${currentDay} 점심 테스트</b>\n\n` +
         `${name}님, 뜻을 떠올려보세요!\n\n` +
         `📝 <b>오늘의 단어:</b>\n` + wordListText + `\n\n` +
-        `✏️ 테스트 하기: ${BASE}/quiz?day=${currentDay}&email=${encodeURIComponent(email)}`
+        `✏️ 테스트 하기: ${dashboardUrl}/quiz?day=${currentDay}&email=${encodeURIComponent(email)}`
 
       const googleChatText = (name: string, currentDay: number, email: string) =>
         `🍽️ *Day ${currentDay} 점심 테스트*\n\n` +
         `${name}님, 뜻을 떠올려보세요!\n\n` +
         `📝 *오늘의 단어:*\n` + wordListText + `\n\n` +
-        `✏️ 테스트 하기: ${BASE}/quiz?day=${currentDay}&email=${encodeURIComponent(email)}`
+        `✏️ 테스트 하기: ${dashboardUrl}/quiz?day=${currentDay}&email=${encodeURIComponent(email)}`
 
       for (const sub of subs) {
         // Skip if already sent today (deduplication)
@@ -323,6 +335,7 @@ ${rows}
         let gchatSent = false
 
         // Send Email
+        const completeActionUrl = await buildCompleteActionUrl(sub.email, day)
         if (settings.email_enabled) {
           const res = await fetch('https://api.resend.com/emails', {
             method: 'POST',
@@ -334,7 +347,7 @@ ${rows}
               from: '옛설판다 <onboarding@resend.dev>',
               to: [sub.email],
               subject: `🍽️ Day ${day} 점심 테스트`,
-              html: buildHtml(name, sub.email, day, words),
+              html: await buildHtml(name, sub.email, day, words, completeActionUrl),
             }),
           })
           emailSent = res.ok
@@ -342,9 +355,9 @@ ${rows}
 
         // Build action buttons for lunch test
         const actionButtons = [
-          { text: '✅ 학습 완료', url: `${BASE}/api/complete?email=${encodeURIComponent(sub.email)}&day=${day}` },
-          { text: '📊 학습 관리', url: `${BASE}/login` },
-          { text: '⏰ 내일로 미루기', url: `${BASE}/postpone?email=${encodeURIComponent(sub.email)}&day=${day}` }
+          { text: '✅ 학습 완료', url: completeActionUrl },
+          { text: '📊 학습 관리', url: `${dashboardUrl}/login` },
+          { text: '⏰ 내일로 미루기', url: `${dashboardUrl}/postpone?email=${encodeURIComponent(sub.email)}&day=${day}` }
         ]
 
         // Send Telegram
@@ -385,3 +398,4 @@ ${rows}
     })
   }
 })
+

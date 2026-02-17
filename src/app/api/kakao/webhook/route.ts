@@ -1,66 +1,162 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerClient } from '@/lib/supabase';
+import { NextRequest, NextResponse } from 'next/server'
+import { getServerClient } from '@/lib/supabase'
+import { createHmac, timingSafeEqual } from 'node:crypto'
+import { sanitizeDay } from '@/lib/auth-middleware'
+import { validateWebhookSecret } from '@/lib/url-config'
+import { buildKakaoTextPayload } from '@/lib/webhook-contract'
+import { checkRateLimit, responseRateLimited } from '@/lib/request-policy'
 
-const DASHBOARD_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://dashboard-keprojects.vercel.app';
+const DASHBOARD_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://dashboard-keprojects.vercel.app'
+const KAKAO_WEBHOOK_SECRET = process.env.KAKAO_WEBHOOK_SECRET || ''
 
 interface KakaoRequest {
   userRequest: {
-    utterance: string;
+    utterance: string
     user: {
-      id: string;
+      id: string
       properties?: {
-        plusfriendUserKey?: string;
-      };
-    };
-  };
+        plusfriendUserKey?: string
+      }
+    }
+  }
   action?: {
-    name?: string;
-    params?: Record<string, string>;
-    clientExtra?: Record<string, string>;
-  };
+    name?: string
+    params?: Record<string, string>
+    clientExtra?: Record<string, string>
+  }
+}
+
+function timingSafeEquals(a: string, b: string): boolean {
+  const aBuf = Buffer.from(a)
+  const bBuf = Buffer.from(b)
+  if (aBuf.length !== bBuf.length) {
+    return false
+  }
+
+  return timingSafeEqual(aBuf, bBuf)
+}
+
+function verifyKakaoSignature(payload: string, signature: string | null): boolean {
+  if (!KAKAO_WEBHOOK_SECRET) {
+    return true
+  }
+
+  if (!signature) {
+    return false
+  }
+
+  const normalized = signature.replace(/^sha256=/i, '').trim()
+  const expectedHex = createHmac('sha256', KAKAO_WEBHOOK_SECRET).update(payload).digest('hex')
+  const expectedBase64 = createHmac('sha256', KAKAO_WEBHOOK_SECRET).update(payload).digest('base64')
+
+  if (timingSafeEquals(normalized, expectedHex)) {
+    return true
+  }
+
+  return timingSafeEquals(normalized, expectedBase64)
+}
+
+function isKakaoRequest(payload: unknown): payload is KakaoRequest {
+  const candidate = payload as {
+    userRequest?: {
+      utterance?: unknown
+      user?: { id?: unknown }
+    }
+  }
+
+  return (
+    !!candidate &&
+    !!candidate.userRequest &&
+    typeof candidate.userRequest.utterance === 'string' &&
+    !!candidate.userRequest.user &&
+    typeof candidate.userRequest.user.id === 'string'
+  )
 }
 
 // Kakao i Open Builder Skill webhook
 export async function POST(request: NextRequest) {
   try {
-    const body: KakaoRequest = await request.json();
-    const kakaoUserId = body.userRequest.user.id;
-    const utterance = body.userRequest.utterance.trim();
-    const actionName = body.action?.name || '';
-    const params = body.action?.params || {};
+    const rate = checkRateLimit('api:webhook:kakao', request, {
+      maxRequests: 120,
+      windowMs: 60_000,
+    })
+    if (!rate.allowed) {
+      return responseRateLimited(rate.retryAfter || 1, 'api:webhook:kakao')
+    }
 
-    const supabase = getServerClient();
+    if (!validateWebhookSecret('KAKAO_WEBHOOK_SECRET', KAKAO_WEBHOOK_SECRET)) {
+      return NextResponse.json(
+        buildKakaoTextPayload('Webhook configuration missing.'),
+        { status: 503 }
+      )
+    }
 
-    // Update last_active
+    const rawBody = await request.text()
+    const signature = request.headers.get('x-kakao-signature')
+
+    if (!verifyKakaoSignature(rawBody, signature)) {
+      return NextResponse.json(
+        buildKakaoTextPayload('Invalid webhook signature.'),
+        { status: 401 }
+      )
+    }
+
+    let parsedBody: unknown
+    try {
+      parsedBody = JSON.parse(rawBody)
+    } catch (parseError) {
+      console.warn('Invalid Kakao webhook body', {
+        error: parseError instanceof Error ? parseError.message : String(parseError),
+      })
+      return NextResponse.json(
+        buildKakaoTextPayload('Invalid request body.'),
+        { status: 400 }
+      )
+    }
+
+    if (!isKakaoRequest(parsedBody)) {
+      return NextResponse.json(
+        buildKakaoTextPayload('Invalid payload format.'),
+        { status: 400 }
+      )
+    }
+
+    const body = parsedBody
+    const kakaoUserId = body.userRequest.user.id
+    const utterance = body.userRequest.utterance.trim()
+    const actionName = body.action?.name || ''
+    const params = body.action?.params || {}
+
+    const supabase = getServerClient()
+
     await supabase
       .from('kakao_users')
       .upsert(
         { kakao_user_id: kakaoUserId, last_active: new Date().toISOString() },
         { onConflict: 'kakao_user_id' }
-      );
+      )
 
-    // Check if user is registered
     const { data: kakaoUser } = await supabase
       .from('kakao_users')
       .select('email, name')
       .eq('kakao_user_id', kakaoUserId)
-      .single();
+      .single()
 
-    // Handle registration flow
     if (actionName === 'register' || utterance.startsWith('등록 ')) {
-      return handleRegister(supabase, kakaoUserId, params.email || utterance.replace('등록 ', '').trim());
+      const response = await handleRegister(supabase, kakaoUserId, params.email || utterance.replace('등록 ', '').trim())
+      return response
     }
 
-    // If not registered, prompt registration
     if (!kakaoUser?.email) {
-      return jsonResponse({
+      return NextResponse.json({
         version: '2.0',
         template: {
           outputs: [
             {
               textCard: {
                 title: '🦝 옛설판다에 오신 것을 환영합니다!',
-                description: '카카오톡으로 매일 비즈니스 영어를 학습할 수 있어요.\n\n먼저 이메일을 등록해주세요.\n아래 버튼을 누르거나 "등록 이메일주소"를 입력해주세요.',
+                description:
+                  '카카오톡으로 매일 비즈니스 영어를 학습할 수 있어요.\n\n먼저 이메일을 등록해주세요.\n아래 버튼을 누르거나 "등록 이메일주소"를 입력해주세요.',
                 buttons: [
                   {
                     label: '이메일 등록하기',
@@ -72,52 +168,48 @@ export async function POST(request: NextRequest) {
             },
           ],
         },
-      });
+      })
     }
 
-    // Get config
-    const { data: configData } = await supabase.from('config').select('key, value');
-    const config: Record<string, string> = {};
-    configData?.forEach((r: { key: string; value: string }) => { config[r.key] = r.value; });
-    const currentDay = parseInt(config.CurrentDay || '1');
+    const { data: configData } = await supabase.from('config').select('key, value')
+    const config: Record<string, string> = {}
+    configData?.forEach((r: { key: string; value: string }) => { config[r.key] = r.value })
+    const currentDay = sanitizeDay(config.CurrentDay || '1')
 
-    // Route by utterance/action
+    if (!currentDay) {
+      return NextResponse.json(
+        buildKakaoTextPayload('Current day setting is invalid.'),
+        { status: 500 }
+      )
+    }
+
     if (utterance === '오늘의 단어' || actionName === 'today_words') {
-      return handleTodayWords(supabase, kakaoUser.email, kakaoUser.name, currentDay);
+      return handleTodayWords(supabase, kakaoUser.email, kakaoUser.name, currentDay)
     }
 
     if (utterance === '테스트' || utterance === '단어 테스트' || actionName === 'test') {
-      return handleTest(kakaoUser.email, currentDay);
+      return handleTest(kakaoUser.email, currentDay)
     }
 
     if (utterance === '복습' || utterance === '오답 노트' || actionName === 'review') {
-      return handleReview(supabase, kakaoUser.email);
+      return handleReview(supabase, kakaoUser.email)
     }
 
     if (utterance === '내 통계' || utterance === '통계' || actionName === 'stats') {
-      return handleStats(supabase, kakaoUser.email, currentDay);
+      return handleStats(supabase, kakaoUser.email, currentDay)
     }
 
     if (utterance === '도움말' || utterance === '메뉴' || actionName === 'help') {
-      return handleHelp(kakaoUser.name);
+      return handleHelp(kakaoUser.name)
     }
 
-    // Default: show menu
-    return handleHelp(kakaoUser.name);
+    return handleHelp(kakaoUser.name)
   } catch (error) {
-    console.error('Kakao webhook error:', error);
-    return jsonResponse({
-      version: '2.0',
-      template: {
-        outputs: [
-          {
-            simpleText: {
-              text: '죄송합니다. 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
-            },
-          },
-        ],
-      },
-    });
+    console.error('Kakao webhook error:', error)
+    return NextResponse.json(
+      buildKakaoTextPayload('Unexpected error occurred.'),
+      { status: 500 }
+    )
   }
 }
 
@@ -135,7 +227,7 @@ async function handleRegister(supabase: ReturnType<typeof getServerClient>, kaka
           },
         ],
       },
-    });
+    })
   }
 
   // Check if subscriber exists
@@ -144,7 +236,7 @@ async function handleRegister(supabase: ReturnType<typeof getServerClient>, kaka
     .select('email, name')
     .eq('email', email)
     .eq('status', 'active')
-    .single();
+    .single()
 
   if (!subscriber) {
     return jsonResponse({
@@ -158,7 +250,7 @@ async function handleRegister(supabase: ReturnType<typeof getServerClient>, kaka
           },
         ],
       },
-    });
+    })
   }
 
   // Link kakao user to subscriber
@@ -172,7 +264,7 @@ async function handleRegister(supabase: ReturnType<typeof getServerClient>, kaka
         last_active: new Date().toISOString(),
       },
       { onConflict: 'kakao_user_id' }
-    );
+    )
 
   return jsonResponse({
     version: '2.0',
@@ -191,7 +283,7 @@ async function handleRegister(supabase: ReturnType<typeof getServerClient>, kaka
         },
       ],
     },
-  });
+  })
 }
 
 // Handle today's words
@@ -205,7 +297,7 @@ async function handleTodayWords(
     .from('words')
     .select('word, meaning')
     .eq('day', currentDay)
-    .order('id');
+    .order('id')
 
   if (!words || words.length === 0) {
     return jsonResponse({
@@ -215,12 +307,12 @@ async function handleTodayWords(
           { simpleText: { text: `Day ${currentDay}에 해당하는 단어가 없습니다.` } },
         ],
       },
-    });
+    })
   }
 
   // Kakao listCard supports max 5 items, so split if needed
-  const firstFive = words.slice(0, 5);
-  const remaining = words.slice(5);
+  const firstFive = words.slice(0, 5)
+  const remaining = words.slice(5)
 
   const outputs: unknown[] = [
     {
@@ -241,36 +333,36 @@ async function handleTodayWords(
         ],
       },
     },
-  ];
+  ]
 
-  // If more than 5 words, add remaining as text
   if (remaining.length > 0) {
     const remainingText = remaining
       .map((w: { word: string; meaning: string }, i: number) => `${i + 6}. ${w.word} - ${w.meaning}`)
-      .join('\n');
+      .join('\n')
+
     outputs.push({
       simpleText: {
         text: `📖 나머지 단어:\n\n${remainingText}`,
       },
-    });
+    })
   }
 
   // Record morning attendance
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toISOString().split('T')[0]
   await supabase.from('attendance').upsert(
     { email, date: today, type: 'morning', completed: true },
     { onConflict: 'email,date,type' }
-  );
+  )
 
   return jsonResponse({
     version: '2.0',
     template: { outputs },
-  });
+  })
 }
 
 // Handle test
 function handleTest(email: string, currentDay: number) {
-  const quizUrl = `${DASHBOARD_URL}/quiz?day=${currentDay}&email=${encodeURIComponent(email)}`;
+  const quizUrl = `${DASHBOARD_URL}/quiz?day=${currentDay}&email=${encodeURIComponent(email)}`
 
   return jsonResponse({
     version: '2.0',
@@ -291,7 +383,7 @@ function handleTest(email: string, currentDay: number) {
         },
       ],
     },
-  });
+  })
 }
 
 // Handle review (wrong words)
@@ -302,7 +394,7 @@ async function handleReview(supabase: ReturnType<typeof getServerClient>, email:
     .eq('email', email)
     .eq('mastered', false)
     .order('wrong_count', { ascending: false })
-    .limit(5);
+    .limit(5)
 
   if (!wrongWords || wrongWords.length === 0) {
     return jsonResponse({
@@ -316,7 +408,7 @@ async function handleReview(supabase: ReturnType<typeof getServerClient>, email:
           },
         ],
       },
-    });
+    })
   }
 
   return jsonResponse({
@@ -343,7 +435,7 @@ async function handleReview(supabase: ReturnType<typeof getServerClient>, email:
         },
       ],
     },
-  });
+  })
 }
 
 // Handle stats
@@ -351,47 +443,47 @@ async function handleStats(supabase: ReturnType<typeof getServerClient>, email: 
   // Get total words
   const { count: totalWords } = await supabase
     .from('words')
-    .select('*', { count: 'exact', head: true });
+    .select('*', { count: 'exact', head: true })
 
   // Get wrong words count
   const { count: wrongCount } = await supabase
     .from('wrong_words')
     .select('*', { count: 'exact', head: true })
     .eq('email', email)
-    .eq('mastered', false);
+    .eq('mastered', false)
 
   // Get mastered count
   const { count: masteredCount } = await supabase
     .from('wrong_words')
     .select('*', { count: 'exact', head: true })
     .eq('email', email)
-    .eq('mastered', true);
+    .eq('mastered', true)
 
   // Get today's attendance
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toISOString().split('T')[0]
   const { data: todayAtt } = await supabase
     .from('attendance')
     .select('type, completed')
     .eq('email', email)
-    .eq('date', today);
+    .eq('date', today)
 
-  const morning = todayAtt?.some((a: { type: string; completed: boolean }) => a.type === 'morning' && a.completed) ? '✅' : '⬜';
-  const lunch = todayAtt?.some((a: { type: string; completed: boolean }) => a.type === 'lunch' && a.completed) ? '✅' : '⬜';
-  const evening = todayAtt?.some((a: { type: string; completed: boolean }) => a.type === 'evening' && a.completed) ? '✅' : '⬜';
+  const morning = todayAtt?.some((a: { type: string; completed: boolean }) => a.type === 'morning' && a.completed) ? '✅' : '⬜'
+  const lunch = todayAtt?.some((a: { type: string; completed: boolean }) => a.type === 'lunch' && a.completed) ? '✅' : '⬜'
+  const evening = todayAtt?.some((a: { type: string; completed: boolean }) => a.type === 'evening' && a.completed) ? '✅' : '⬜'
 
   const statsText = [
-    `📊 나의 학습 통계`,
-    ``,
+    '📊 나의 학습 통계',
+    '',
     `📅 현재 Day: ${currentDay}`,
     `📚 총 단어: ${totalWords || 0}개`,
     `✅ 마스터: ${masteredCount || 0}개`,
     `❌ 복습 필요: ${wrongCount || 0}개`,
-    ``,
+    '',
     `🗓️ 오늘의 출석:`,
     `${morning} 아침 단어`,
     `${lunch} 점심 테스트`,
     `${evening} 저녁 복습`,
-  ].join('\n');
+  ].join('\n')
 
   return jsonResponse({
     version: '2.0',
@@ -412,7 +504,7 @@ async function handleStats(supabase: ReturnType<typeof getServerClient>, email: 
         },
       ],
     },
-  });
+  })
 }
 
 // Handle help/menu
@@ -438,9 +530,9 @@ function handleHelp(name: string | null) {
         { label: '❓ 도움말', action: 'message', messageText: '도움말' },
       ],
     },
-  });
+  })
 }
 
 function jsonResponse(data: unknown) {
-  return NextResponse.json(data);
+  return NextResponse.json(data)
 }

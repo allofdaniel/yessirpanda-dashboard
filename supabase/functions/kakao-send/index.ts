@@ -1,4 +1,5 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+﻿import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { getDashboardUrl } from '../_shared/action-links.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -21,7 +22,7 @@ async function hmacSha256(secret: string, message: string): Promise<string> {
     .join('')
 }
 
-// Solapi API for sending KakaoTalk messages (알림톡/친구톡)
+// Solapi API for sending KakaoTalk messages (?뚮┝??移쒓뎄??
 // Docs: https://docs.solapi.com/
 // Template ID 129026 is used for daily words messages
 async function sendSolapiMessage(
@@ -55,7 +56,7 @@ async function sendSolapiMessage(
       to: params.to,
       from: params.from,
       text: params.text,
-      type: 'ATA', // 알림톡 (Alimtalk - Template-based KakaoTalk message)
+      type: 'ATA', // ?뚮┝??(Alimtalk - Template-based KakaoTalk message)
       kakaoOptions: params.kakaoOptions,
     },
   }
@@ -84,7 +85,7 @@ Deno.serve(async (req) => {
     const solapiApiSecret = Deno.env.get('SOLAPI_API_SECRET') || ''
     const solapiPfId = Deno.env.get('SOLAPI_PF_ID') || '' // KakaoTalk Channel PF ID
     const solapiSender = Deno.env.get('SOLAPI_SENDER') || '' // Sender phone number
-    const dashboardUrl = Deno.env.get('DASHBOARD_URL') || 'https://dashboard-keprojects.vercel.app'
+    const dashboardUrl = getDashboardUrl()
 
     const supabase = createClient(supabaseUrl, supabaseKey)
 
@@ -125,75 +126,75 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Build message based on type
-    let messageText = ''
-    let templateId = '129026' // KakaoTalk message template ID
-    let buttons: Array<{ buttonType: string; buttonName: string; linkMobile?: string; linkPc?: string }> = []
+  // Build message based on type
+  let messageText = ''
+  const templateId = '129026' // KakaoTalk message template ID
+  let buttons: Array<{ buttonType: string; buttonName: string; linkMobile?: string; linkPc?: string }> = []
 
     if (type === 'morning') {
       const wordList = words.map((w: { word: string; meaning: string }, i: number) =>
         `${i + 1}. ${w.word} - ${w.meaning}`
       ).join('\n')
 
-      messageText = `🐼 옛설판다 Day ${currentDay}\n\n📚 오늘의 비즈니스 영어 (${words.length}개)\n\n${wordList}\n\n💡 단어를 3번씩 소리 내어 읽어보세요!`
+      messageText = `?맻 ?쏆꽕?먮떎 Day ${currentDay}\n\n?뱴 ?ㅻ뒛??鍮꾩쫰?덉뒪 ?곸뼱 (${words.length}媛?\n\n${wordList}\n\n?뮕 ?⑥뼱瑜?3踰덉뵫 ?뚮━ ?댁뼱 ?쎌뼱蹂댁꽭??`
 
       buttons = [
         {
           buttonType: 'WL',
-          buttonName: '✏️ 테스트 하기',
+          buttonName: '?륅툘 ?뚯뒪???섍린',
           linkMobile: `${dashboardUrl}/quiz?day=${currentDay}&email=#{email}`,
           linkPc: `${dashboardUrl}/quiz?day=${currentDay}&email=#{email}`,
         },
         {
           buttonType: 'WL',
-          buttonName: '⏰ 내일로 미루기',
+          buttonName: '일정 미루기',
           linkMobile: `${dashboardUrl}/postpone?email=#{email}&day=${currentDay}`,
           linkPc: `${dashboardUrl}/postpone?email=#{email}&day=${currentDay}`,
         },
         {
           buttonType: 'WL',
-          buttonName: '📊 대시보드',
+          buttonName: '바로 시작',
           linkMobile: `${dashboardUrl}/login`,
           linkPc: `${dashboardUrl}/login`,
         },
       ]
     } else if (type === 'test') {
-      messageText = `🐼 옛설판다 Day ${currentDay}\n\n✏️ 점심 테스트 시간이에요!\n\n오늘 아침에 학습한 ${words.length}개의 단어를 테스트해보세요.\n\n외운 단어와 재학습할 단어를 체크하세요!`
+      messageText = `?맻 ?쏆꽕?먮떎 Day ${currentDay}\n\n?륅툘 ?먯떖 ?뚯뒪???쒓컙?댁뿉??\n\n?ㅻ뒛 ?꾩묠???숈뒿??${words.length}媛쒖쓽 ?⑥뼱瑜??뚯뒪?명빐蹂댁꽭??\n\n?몄슫 ?⑥뼱? ?ы븰?듯븷 ?⑥뼱瑜?泥댄겕?섏꽭??`
 
       buttons = [
         {
           buttonType: 'WL',
-          buttonName: '테스트 시작하기',
+          buttonName: '?뚯뒪???쒖옉?섍린',
           linkMobile: `${dashboardUrl}/quiz?day=${currentDay}&email=#{email}`,
           linkPc: `${dashboardUrl}/quiz?day=${currentDay}&email=#{email}`,
         },
         {
           buttonType: 'WL',
-          buttonName: '⏰ 내일로 미루기',
+          buttonName: '일정 미루기',
           linkMobile: `${dashboardUrl}/postpone?email=#{email}&day=${currentDay}`,
           linkPc: `${dashboardUrl}/postpone?email=#{email}&day=${currentDay}`,
         },
       ]
     } else if (type === 'review') {
-      messageText = `🐼 옛설판다 Day ${currentDay}\n\n📝 저녁 복습 시간이에요!\n\n오늘 학습한 단어를 한 번 더 복습해보세요.\n틀린 단어는 대시보드에서 확인할 수 있어요.`
+      messageText = `?맻 ?쏆꽕?먮떎 Day ${currentDay}\n\n?뱷 ???蹂듭뒿 ?쒓컙?댁뿉??\n\n?ㅻ뒛 ?숈뒿???⑥뼱瑜???踰???蹂듭뒿?대낫?몄슂.\n?由??⑥뼱????쒕낫?쒖뿉???뺤씤?????덉뼱??`
 
       buttons = [
         {
           buttonType: 'WL',
-          buttonName: '복습하기',
+          buttonName: '蹂듭뒿?섍린',
           linkMobile: `${dashboardUrl}/quiz?day=${currentDay}&email=#{email}`,
           linkPc: `${dashboardUrl}/quiz?day=${currentDay}&email=#{email}`,
         },
         {
           buttonType: 'WL',
-          buttonName: '오답 노트',
+          buttonName: '?ㅻ떟 ?명듃',
           linkMobile: `${dashboardUrl}/wrong`,
           linkPc: `${dashboardUrl}/wrong`,
         },
       ]
     }
 
-    // If Solapi is configured, send via Solapi (알림톡)
+    // If Solapi is configured, send via Solapi (?뚮┝??
     if (solapiApiKey && solapiApiSecret && solapiPfId && solapiSender) {
       const results = []
       for (const subscriber of kakaoSubscribers) {
@@ -270,3 +271,4 @@ Deno.serve(async (req) => {
     })
   }
 })
+

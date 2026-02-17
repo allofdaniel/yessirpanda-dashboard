@@ -8,13 +8,12 @@ interface MainContentProps {
 }
 
 export default function MainContent({ children, hasUser }: MainContentProps) {
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return localStorage.getItem('sidebarCollapsed') === 'true'
+  })
 
   useEffect(() => {
-    // Load initial state from localStorage
-    const saved = localStorage.getItem('sidebarCollapsed')
-    if (saved === 'true') setCollapsed(true)
-
     // Listen for sidebar toggle events
     const handleToggle = (e: CustomEvent<{ collapsed: boolean }>) => {
       setCollapsed(e.detail.collapsed)
