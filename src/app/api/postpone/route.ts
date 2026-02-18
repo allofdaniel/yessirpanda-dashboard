@@ -15,28 +15,28 @@ interface PostponeBody {
 
 function parseOptionalEmail(raw: unknown) {
   if (raw === undefined) {
-    return { success: true, value: undefined as string | undefined }
+    return { success: true as const, value: undefined as string | undefined }
   }
 
   const parsed = sanitizeEmail(typeof raw === 'string' ? raw : null)
   if (!parsed) {
-    return { success: false, code: 'INVALID_EMAIL', message: 'Invalid email format' }
+    return { success: false as const, code: 'INVALID_EMAIL', message: 'Invalid email format' }
   }
 
-  return { success: true, value: parsed }
+  return { success: true as const, value: parsed }
 }
 
 function parseOptionalDay(raw: unknown) {
   if (raw === undefined) {
-    return { success: true, value: undefined as number | undefined }
+    return { success: true as const, value: undefined as number | undefined }
   }
 
   const parsed = sanitizeDay(typeof raw === 'string' || typeof raw === 'number' ? raw : null)
   if (!parsed) {
-    return { success: false, code: 'INVALID_DAY', message: 'Day must be a positive integer' }
+    return { success: false as const, code: 'INVALID_DAY', message: 'Day must be a positive integer' }
   }
 
-  return { success: true, value: parsed }
+  return { success: true as const, value: parsed }
 }
 
 function previewEmail(email: string | null | undefined) {

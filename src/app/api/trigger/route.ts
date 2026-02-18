@@ -13,22 +13,23 @@ interface TriggerRequest {
 
 function isValidWorkflow(raw: unknown) {
   if (typeof raw !== 'string') {
-    return { success: false, message: 'workflow must be a string' };
+    return { success: false as const, code: 'INVALID_WORKFLOW', message: 'workflow must be a string' };
   }
 
   const normalized = raw.trim();
   if (!normalized) {
-    return { success: false, message: 'workflow is required' };
+    return { success: false as const, code: 'INVALID_WORKFLOW', message: 'workflow is required' };
   }
 
   if (!VALID_WORKFLOWS.includes(normalized)) {
     return {
-      success: false,
+      success: false as const,
+      code: 'INVALID_WORKFLOW',
       message: `workflow must be one of: ${VALID_WORKFLOWS.join(', ')}`,
     };
   }
 
-  return { success: true, value: normalized };
+  return { success: true as const, value: normalized };
 }
 
 // POST /api/trigger - Trigger a Supabase Edge Function
@@ -56,18 +57,7 @@ export async function POST(request: NextRequest) {
     const parsed = await parseJsonRequest<TriggerRequest>(request, {
       workflow: {
         required: true,
-        parse: (value) => {
-          const parsedWorkflow = isValidWorkflow(value);
-          if (!parsedWorkflow.success) {
-            return {
-              success: false,
-              code: 'INVALID_WORKFLOW',
-              message: parsedWorkflow.message,
-            };
-          }
-
-          return { success: true, value: parsedWorkflow.value };
-        },
+        parse: isValidWorkflow,
       },
     });
 

@@ -16,7 +16,7 @@ const DEFAULT_PAGE_LIMITS = {
 const MAX_PAGE_LIMIT = 500;
 
 function normalizeLimit(value: number | undefined, fallback: number): number {
-  if (!Number.isInteger(value) || value <= 0) {
+  if (value === undefined || !Number.isInteger(value) || value <= 0) {
     return fallback;
   }
 
@@ -24,20 +24,21 @@ function normalizeLimit(value: number | undefined, fallback: number): number {
 }
 
 function normalizeOffset(value: number | undefined): number {
-  if (!Number.isInteger(value) || value < 0) {
+  if (value === undefined || !Number.isInteger(value) || value < 0) {
     return 0;
   }
   return value;
 }
 
-function applyPaging(
-  query: ReturnType<ReturnType<typeof getServerClient>['from']>,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyPaging<T extends { range: (from: number, to: number) => any }>(
+  query: T,
   options: PagingOptions,
   defaultLimit: number,
-): ReturnType<ReturnType<typeof getServerClient>['from']> {
+): T {
   const limit = normalizeLimit(options.limit, defaultLimit);
   const offset = normalizeOffset(options.offset);
-  return query.range(offset, offset + limit - 1);
+  return query.range(offset, offset + limit - 1) as T;
 }
 
 // Config operations

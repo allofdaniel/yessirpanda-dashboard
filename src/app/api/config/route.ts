@@ -13,6 +13,7 @@ import { checkRateLimit, responseRateLimited } from '@/lib/request-policy';
 interface ConfigUpdateBody {
   key: string;
   value: string;
+  [key: string]: unknown;
 }
 
 // GET /api/config - Get configuration

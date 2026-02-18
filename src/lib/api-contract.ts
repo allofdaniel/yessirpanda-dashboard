@@ -1,7 +1,7 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
 import { sanitizeDay, sanitizeEmail } from '@/lib/auth-middleware';
 
-type ValidationDetails = Record<string, unknown> | string | string[] | undefined;
+type ValidationDetails = Record<string, unknown> | string | string[] | ValidationIssue[] | undefined;
 
 export type ApiErrorCode =
   | 'INVALID_INPUT'
@@ -37,7 +37,7 @@ interface FieldParser<T> {
   parse: (value: unknown) => ParseResult<T>;
 }
 
-type Schema<T extends Record<string, unknown>> = {
+type Schema<T> = {
   [K in keyof T]: FieldParser<T[K]>;
 };
 
@@ -86,7 +86,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   );
 }
 
-export async function parseJsonRequest<T extends Record<string, unknown>>(
+export async function parseJsonRequest<T>(
   request: NextRequest,
   schema: Schema<T>,
   options?: {
@@ -242,8 +242,8 @@ export function parseFailureToResponse(
     return apiError('INTERNAL_ERROR', 'Parsing was successful');
   }
 
-  if (Array.isArray(result.details)) {
-    return validationError(result.details);
+  if (Array.isArray(result.details) && result.details.length > 0 && typeof result.details[0] === 'object' && 'field' in result.details[0]) {
+    return validationError(result.details as ValidationIssue[]);
   }
 
   return apiError(

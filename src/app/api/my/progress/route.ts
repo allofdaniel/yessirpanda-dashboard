@@ -17,6 +17,7 @@ interface ProgressBody {
   email: string
   action: ProgressAction
   day?: string | number | null
+  [key: string]: unknown
 }
 
 function parseAction(raw: unknown) {
@@ -37,7 +38,7 @@ function parseAction(raw: unknown) {
     } as const
   }
 
-  return { success: true, value: action as ProgressAction }
+  return { success: true as const, value: action as ProgressAction }
 }
 
 function parseProgressDay(raw: unknown) {
@@ -49,7 +50,7 @@ function parseProgressDay(raw: unknown) {
       message: 'day is invalid',
     } as const
   }
-  return { success: true, value }
+  return { success: true as const, value }
 }
 
 // GET /api/my/progress - Get user's personal progress
@@ -60,9 +61,10 @@ export async function GET(request: NextRequest) {
     const { user } = authResult
 
     const emailParam = request.nextUrl.searchParams.get('email')
-    const email = parseEmail(emailParam || user.email)
+    const emailResult = parseEmail(emailParam || user.email)
 
-    if (!email) return apiError('INVALID_INPUT', 'Valid email required')
+    if (!emailResult.success) return apiError('INVALID_INPUT', 'Valid email required')
+    const email = emailResult.value
 
     if (!verifyEmailOwnership(user.email, email)) {
       return apiError('FORBIDDEN', 'Forbidden')
@@ -137,17 +139,7 @@ export async function POST(request: NextRequest) {
     const parsed = await parseJsonRequest<ProgressBody>(request, {
       email: {
         required: true,
-        parse: (value) => {
-          const email = parseEmail(typeof value === 'string' ? value : '')
-          if (!email) {
-            return {
-              success: false,
-              code: 'INVALID_EMAIL',
-              message: 'Invalid email',
-            }
-          }
-          return { success: true, value: email }
-        },
+        parse: parseEmail,
       },
       action: { required: true, parse: parseAction },
       day: {

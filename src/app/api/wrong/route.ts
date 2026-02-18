@@ -131,7 +131,9 @@ export async function GET(request: NextRequest) {
     if (authResult instanceof NextResponse) return apiError('UNAUTHORIZED', 'Authentication required');
     const { user } = authResult;
 
-    const requestedEmail = parseEmail(request.nextUrl.searchParams.get('email')) || user.email;
+    const emailParam = request.nextUrl.searchParams.get('email');
+    const emailResult = emailParam ? parseEmail(emailParam) : null;
+    const requestedEmail = emailResult?.success ? emailResult.value : user.email;
 
     const parsedLimit = parseIntRange(Number(request.nextUrl.searchParams.get('limit')), {
       min: 1,

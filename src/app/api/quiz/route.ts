@@ -1,7 +1,7 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
 import { getServerClient } from '@/lib/supabase';
 import type { QuizAnswer } from '@/lib/types';
-import { requireAuth, sanitizeDay, verifyEmailOwnership } from '@/lib/auth-middleware';
+import { requireAuth, sanitizeDay, sanitizeEmail, verifyEmailOwnership } from '@/lib/auth-middleware';
 import {
   apiError,
   parseDay,
