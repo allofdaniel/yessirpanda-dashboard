@@ -45,19 +45,17 @@ function previewEmail(email: string | null | undefined) {
 }
 
 // POST: Postpone today's words to tomorrow
+// NOTE: This endpoint allows unauthenticated access when email is provided in body
+// (for email link clicks). Rate limiting protects against abuse.
 export async function POST(request: NextRequest) {
   try {
     const rate = checkRateLimit('api:postpone:post', request, {
-      maxRequests: 60,
+      maxRequests: 10,  // Stricter rate limit for unauthenticated
       windowMs: 60_000,
     });
     if (!rate.allowed) {
       return responseRateLimited(rate.retryAfter || 1, 'api:postpone:post');
     }
-
-    const authResult = await requireAuth(request)
-    if (authResult instanceof NextResponse) return apiError('UNAUTHORIZED', 'Authentication required')
-    const { user } = authResult
 
     const parsed = await parseJsonRequest<PostponeBody>(request, {
       email: { required: false, parse: parseOptionalEmail },
@@ -68,7 +66,14 @@ export async function POST(request: NextRequest) {
       return parseFailureToResponse(parsed)
     }
 
-    const bodyEmail = parsed.value.email || user.email
+    // Try to get authenticated user, but don't require it
+    let userEmail: string | null = null
+    const authResult = await requireAuth(request)
+    if (!(authResult instanceof NextResponse)) {
+      userEmail = authResult.user.email
+    }
+
+    const bodyEmail = parsed.value.email || userEmail
     const requestedDay = parsed.value.day
     const sanitizedEmail = sanitizeEmail(bodyEmail)
 
@@ -76,7 +81,8 @@ export async function POST(request: NextRequest) {
       return apiError('INVALID_INPUT', 'Email is required')
     }
 
-    if (!verifyEmailOwnership(user.email, sanitizedEmail)) {
+    // If authenticated, verify email ownership
+    if (userEmail && !verifyEmailOwnership(userEmail, sanitizedEmail)) {
       return apiError('FORBIDDEN', 'You can only update your own data')
     }
 
